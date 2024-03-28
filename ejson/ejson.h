@@ -388,7 +388,6 @@ namespace ejson
             SetInvalid();
             type = Type::String;
             new (buffer) string(std::move(value));
-            string* str = (string*)buffer;
         }
 
         string& AsString()

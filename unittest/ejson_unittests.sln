@@ -7,16 +7,28 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ejson_unittests", "ejson_un
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug Clang|x64 = Debug Clang|x64
+		Debug Clang|x86 = Debug Clang|x86
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Release Clang|x64 = Release Clang|x64
+		Release Clang|x86 = Release Clang|x86
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug Clang|x64.ActiveCfg = Debug Clang|x64
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug Clang|x64.Build.0 = Debug Clang|x64
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug Clang|x86.ActiveCfg = Debug Clang|Win32
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug Clang|x86.Build.0 = Debug Clang|Win32
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug|x64.ActiveCfg = Debug|x64
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug|x64.Build.0 = Debug|x64
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug|x86.ActiveCfg = Debug|Win32
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Debug|x86.Build.0 = Debug|Win32
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release Clang|x64.ActiveCfg = Release Clang|x64
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release Clang|x64.Build.0 = Release Clang|x64
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release Clang|x86.ActiveCfg = Release Clang|Win32
+		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release Clang|x86.Build.0 = Release Clang|Win32
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release|x64.ActiveCfg = Release|x64
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release|x64.Build.0 = Release|x64
 		{B9110291-E182-4FF8-B509-3CC3A88354ED}.Release|x86.ActiveCfg = Release|Win32

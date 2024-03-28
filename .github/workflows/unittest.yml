@@ -1,0 +1,22 @@
+name: build and run unittest
+
+on: [push]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      name: checkout code
+
+    - name: install clang latest
+      run: |
+        sudo apt-get update
+        sudo apt-get install clang -y
+
+    - name: build unittests
+      run: |
+        clang++ -I . -std=c++20 -o unittest.exe ./unittest/ejson_unittests.cpp
+
+    - name: run unittests
+      run: ./unittest.exe

@@ -1,7 +1,7 @@
 # ejson
 json library in c++
 
-single header c++ json library that separate parsing from processing, making it very easy to customize and implement json serialization for any rtti library. parsing processing is stream friendly, excellent to minimize memory footprint for large json file.
+single header c++ json library that separate parsing from processing, making it very easy to customize and implement json serialization for any rtti library. Parsing and processing are stream friendly that minimize memory footprint for large json file.
 
 ## Introduction
 
@@ -48,7 +48,7 @@ prettify:
 }
 ```
 
-## Configutation
+## Configuration
 
 modify configuration at the beginning of ejson.h
 
