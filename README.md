@@ -66,7 +66,7 @@ read from file :
     {"FirstName":"John","LastName":"Doe","Age":71,"Music":["punk","country","folk"]}
 ```
 
-## Error Handling
+## Error
 read file with error:
 ```
     std::wifstream fileInputStream("..\\data\\john_doe_err.json");

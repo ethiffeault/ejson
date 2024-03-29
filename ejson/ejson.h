@@ -1389,14 +1389,11 @@ namespace ejson
 
         void PropertyBegin(const string_view& key)
         {
-            EJSON_ASSERT(propertyName.size() == 0, "already have a current property");
             propertyName = key;
         }
 
         void PropertyEnd()
         {
-            EJSON_ASSERT(propertyName.size() != 0, "no current property");
-            propertyName = {};
         }
 
         void ArrayBegin()

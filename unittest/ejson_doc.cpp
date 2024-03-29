@@ -65,6 +65,7 @@ namespace doc
             {
                 // error
                 std::wcout << "error at line/column " << error.Line << "/" << error.Column << ": " << error.Error;
+                // output : error at line/column 3/6: invalid token
             }
         }
     }
