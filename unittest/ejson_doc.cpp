@@ -14,12 +14,12 @@ namespace doc
         string jsonInput = L"{\"name\":\"John\"}";
         Value value;
         // read input to Value
-        Json::Read(jsonInput, value);
+        JsonRead(jsonInput, value);
         std::wcout << "value name is : " << value[L"name"].AsString() << std::endl << std::endl;
 
         // write it back to a string
         string jsonOutput;
-        Json::Write(value, jsonOutput);
+        JsonWrite(value, jsonOutput);
 
         if (jsonInput == jsonOutput)
             std::wcout << "input and output are the same: " << std::endl;
@@ -27,10 +27,9 @@ namespace doc
 
         // for prettify output
         string prettifyOutput;
-        Json::Write(value, prettifyOutput, true);
+        JsonWrite(value, prettifyOutput, true);
         std::wcout << L"prettify:" << std::endl;
         std::wcout << prettifyOutput << std::endl << std::endl;
-
     }
 
     TEST_CASE("doc_file")
@@ -40,18 +39,18 @@ namespace doc
         {
             // parse file
             Value value;
-            Json::Read(fileInputStream, value);
+            JsonRead(fileInputStream, value);
 
             // write it back to the console
             string jsonOutput;
-            Json::Write(value, jsonOutput);
+            JsonWrite(value, jsonOutput);
             std::wcout << jsonOutput << std::endl;;
 
             // write it back to another file and prettify
             std::wofstream fileOutputStream("..\\data\\john_doe_output.json");
             if (fileOutputStream)
             {
-                Json::Write(value, fileOutputStream, true);
+                JsonWrite(value, fileOutputStream, true);
             }
         }
     }
@@ -64,7 +63,7 @@ namespace doc
             // parse file
             Value value;
             ParserError error;
-            if (Json::Read(fileInputStream, value, error))
+            if (JsonRead(fileInputStream, value, error))
             {
                 // no error ...
             }

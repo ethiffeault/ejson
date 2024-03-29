@@ -4,17 +4,13 @@ json library in c++
 
 Single header c++ [ejson.h](ejson/ejson.h) json library that separate parsing from processing, making it very easy to customize and implement json serialization for any rtti library. Parsing and processing are stream friendly to minimize memory footprint for large json file. Support both char and wide char.
 
-
-
 ejson provide a "Value" type to handle underlying json type (null, bool, number, string, array and object)
-
 
 read json from string:
 ```cpp
-    string jsonInput = L"{\"name\":\"John\"}";
-    Value value;
-    // read input to Value
-    Json::Read(jsonInput, value);
+    string input = L"{\"name\":\"John\"}";
+    ejson::Value value;
+    ejson::Read(input, value);
     std::wcout << "value name is : " << value[L"name"].AsString() << std::endl;
 ```
 ```
@@ -22,12 +18,12 @@ read json from string:
 ```
 write it back to a string:
 ```cpp
-    string jsonOutput;
-    Json::Write(value, jsonOutput);
+    string output;
+    ejson::Write(value, output);
 
-    if (jsonInput == jsonOutput)
+    if (input == output)
         std::wcout << "input and output are the same: " << std::endl;;
-    std::wcout << jsonOutput << std::endl << std::endl;
+    std::wcout << output << std::endl << std::endl;
 ```
 ```
     input and output are the same:
@@ -35,9 +31,8 @@ write it back to a string:
 ```
 write prettify json to string:
 ```cpp
-    // for prettify output
     string prettifyOutput;
-    Json::Write(value, prettifyOutput, true);
+    ejson::Write(value, prettifyOutput, true);
     std::wcout << prettifyOutput << std::endl << std::endl;
 
 ```
@@ -52,13 +47,13 @@ write prettify json to string:
 ### Read
 
 ```cpp
-    std::wifstream fileInputStream("..\\data\\john_doe.json");
-    Value value;
-    Json::Read(fileInputStream, value);
+    std::wifstream input("..\\data\\john_doe.json");
+    ejson::Value value;
+    ejson::Read(input, value);
 
-    string jsonOutput;
-    Json::Write(value, jsonOutput);
-    std::wcout << jsonOutput;
+    string output;
+    ejson::Write(value, output);
+    std::wcout << output;
 ```
 ```json
     {"FirstName":"John","LastName":"Doe","Age":71,"Music":["punk","country","folk"]}
@@ -69,13 +64,13 @@ write prettify json to string:
 read from file and write back to another file in pretty format:
 ```cpp
     // read
-    std::wifstream fileInputStream("..\\data\\john_doe.json");
-    Value value;
-    Json::Read(fileInputStream, value);
+    std::wifstream input("..\\data\\john_doe.json");
+    ejson::Value value;
+    ejson::Read(input, value);
 
     // write
-    std::wofstream fileOutputStream("..\\data\\john_doe_output.json");
-    Json::Write(value, fileOutputStream, true);
+    std::wofstream output("..\\data\\john_doe_output.json");
+    ejson::Write(value, output, true);
 ```
 john_doe_output.json:
 ```json
@@ -95,10 +90,10 @@ john_doe_output.json:
 
 read file with error:
 ```cpp
-    std::wifstream fileInputStream("..\\data\\john_doe_err.json");
-    Value value;
-    ParserError error;
-    if (Json::Read(fileInputStream, value, error))
+    std::wifstream input("..\\data\\john_doe_err.json");
+    ejson::Value value;
+    ejson::ParserError error;
+    if (ejson::Read(input, value, error))
     {
         // no error ...
     }
