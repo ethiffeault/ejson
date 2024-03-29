@@ -1,12 +1,5 @@
 #pragma once
 
-#include <fstream>
-#include <map>
-#include <string_view>
-#include <vector>
-#include <sstream>
-#include <unordered_map>
-
 //
 // Configurations
 
@@ -15,6 +8,15 @@
 #if EJSON_CONFIG_FILE
     #include "ejson_config.h"
 #else
+
+// std default implementation
+
+#include <fstream>
+#include <map>
+#include <string_view>
+#include <vector>
+#include <sstream>
+#include <unordered_map>
 
 #define EJSON_MOVE std::move
 #define EJSON_FORWARD std::forward
@@ -33,17 +35,17 @@
     // Assert and Error
     #include <cassert>
     #include <iostream>
-    #define EJSON_ASSERT(cond, ...) \
+    #define EJSON_ASSERT(cond, msg) \
                     do { \
                         if (!(cond)) { \
-                            ::std::cerr << __VA_ARGS__ << ::std::endl; \
+                            ::std::cerr << msg << ::std::endl; \
                             assert(cond); \
                         } \
                     } while (0)
     #define EJSON_ERROR(msg) EJSON_ASSERT(true, msg)
 #endif
 
-// keep insertion/parsing order ? use full for tooling. for serialization when order don't matter, set this to 0 for speed
+// keep insertion/parsing order ? For serialization loading only when order don't matter, set this to 0 for speed
 #define EJSON_MAP_ORDERED 1
 
 namespace ejson
@@ -263,9 +265,9 @@ namespace ejson
     }
 #endif // #if EJSON_MAP_ORDERED
 
-
 }
 #endif // #if EJSON_CONFIG_FILE
+
 //
 // End configurations 
 
