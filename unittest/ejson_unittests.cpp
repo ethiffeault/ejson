@@ -66,7 +66,7 @@ namespace test_value
         Value value1;
         value1.SetString(EJSON_TEXT("hello"));
 
-        Value::ArrayType& array = value.AsArray();
+        vector<Value>& array = value.AsArray();
         array.push_back(value0);
         array.emplace_back(std::move(value1));
         array.emplace_back();
@@ -256,7 +256,7 @@ namespace test_parser
             CHECK(result == true);
             
             REQUIRE(jsonValue.IsObject());
-            Value::ObjectType& object = jsonValue.AsObject();
+            map<string, Value>& object = jsonValue.AsObject();
             REQUIRE(object.size() == 2);
 
             REQUIRE(object[EJSON_TEXT("p0")].IsBool());

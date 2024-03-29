@@ -16,6 +16,9 @@
     #include "ejson_config.h"
 #else
 
+#define EJSON_MOVE std::move
+#define EJSON_FORWARD std::forward
+
 // char or wchar_t
 #define EJSON_WCHAR 1
 
@@ -38,27 +41,15 @@
                         } \
                     } while (0)
     #define EJSON_ERROR(msg) EJSON_ASSERT(true, msg)
-    #define EJON_INTERNAL_ASSERT(cond, msg) EJSON_ASSERT(cond, msg)
-    #define EJON_INTERNAL_ERROR(msg) EJSON_ERROR(msg)
 #endif
-
-// for custom map container, define EJSON_MAP_CUSTOM to 1 and implement this in ejson namespace:
-//      #define EJSON_MAP_CUSTOM 1
-//      template<typename KEY, typename VALUE>
-//      using map = ...;
-//      template<typename KEY, typename VALUE>
-//      VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key){...}
-//      template<typename KEY, typename VALUE>
-//      VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value) {...}
-//
-//  see OrderedMap below for reference.
-#define EJSON_MAP_CUSTOM 0
 
 // keep insertion/parsing order ? use full for tooling. for serialization when order don't matter, set this to 0 for speed
 #define EJSON_MAP_ORDERED 1
 
 namespace ejson
 {
+    // double or float
+    using number = double;
 
 #if EJSON_WCHAR
     using string_char = wchar_t;
@@ -74,14 +65,76 @@ namespace ejson
     using output_stream = ::basic_ostream<char>;
 #endif
 
-    // vector implementation
+    template <typename T>
+    size_t StringSize(const T& str)
+    {
+        return str.size();
+    }
+
+    inline void StringClear(string& str)
+    {
+        str.clear();
+    }
+
+    inline void StringAdd(string& str, string_char car)
+    {
+        str.push_back(car);
+    }
+
+    inline void StringAdd(string& str, const string& other)
+    {
+        str.append(other);
+    }
+
+    inline void WriteNumber(number value, string& output)
+    {
+        #if EJSON_WCHAR
+            // beurk, no std::to_wstring
+            std::wstringstream wss;
+            wss << value;
+            output = wss.str();
+        #else
+            output = std::to_string(value);
+        #endif
+    }
+
+    // stream
+
+    inline bool StreamWrite(output_stream& stream, string_char car)
+    {
+        stream << car;
+        return true;
+    }
+
+    inline size_t StreamWrite(output_stream& stream, const string_view& str)
+    {
+        stream << str;
+        return StringSize(str);
+    }
+
+    // vector
+
     template<typename VALUE>
     using vector = std::vector<VALUE>;
 
-    // double or float
-    using number = double;
+    template<typename VALUE>
+    size_t VectorSize(const vector<VALUE>& vector)
+    {
+        return vector.size();
+    }
 
-#if !EJSON_MAP_CUSTOM
+    template<typename VALUE>
+    void VectorRemoveLast(vector<VALUE>& vector)
+    {
+        vector.pop_back();
+    }
+    template<typename VALUE>
+    void VectorEmplace(vector<VALUE>& vector, VALUE&& value)
+    {
+        vector.emplace_back(EJSON_FORWARD<VALUE>(value));
+    }
+
+    // map
 
 #if EJSON_MAP_ORDERED
 
@@ -95,13 +148,13 @@ namespace ejson
 
         class Iterator
         {
-            using key_iterator = typename std::vector<KEY>::const_iterator;
+            using KeyIterator = typename std::vector<KEY>::const_iterator;
             const OrderedMap* dict;
-            key_iterator it;
+            KeyIterator it;
 
         public:
 
-            Iterator(const OrderedMap* dict, key_iterator it) : dict(dict), it(it) {}
+            Iterator(const OrderedMap* dict, KeyIterator it) : dict(dict), it(EJSON_MOVE(it)) {}
 
             Iterator& operator++()
             {
@@ -141,7 +194,7 @@ namespace ejson
 
         auto emplace(const KEY& key, VALUE&& value)
         {
-            auto result = map.emplace(key, std::forward<VALUE>(value));
+            auto result = map.emplace(key, EJSON_FORWARD<VALUE>(value));
             if (result.second)
                 keys.push_back(key);
             return result;
@@ -150,7 +203,7 @@ namespace ejson
         // try add a new value and return it pointer, else return pointer of existing value
         VALUE* TryEmplace(const KEY& key, const VALUE&& value)
         {
-            auto result = map.try_emplace(key, std::move(value));
+            auto result = map.try_emplace(key, EJSON_MOVE(value));
             if (result.second)
                 keys.push_back(result.first->first);
             return &result.first->second;
@@ -184,7 +237,7 @@ namespace ejson
     template<typename KEY, typename VALUE>
     VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value)
     {
-        return m.TryEmplace(key, std::forward<VALUE>(value));
+        return m.TryEmplace(key, EJSON_FORWARD<VALUE>(value));
     }
 
 #else // #if EJSON_MAP_ORDERED
@@ -205,11 +258,11 @@ namespace ejson
     template<typename KEY, typename VALUE>
     VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value)
     {
-        auto [it, success] = m.try_emplace(key, std::forward<VALUE>(value));
+        auto [it, success] = m.try_emplace(key, EJSON_FORWARD<VALUE>(value));
         return &(it->second);
     }
 #endif // #if EJSON_MAP_ORDERED
-#endif // !EJSON_MAP_CUSTOM
+
 
 }
 #endif // #if EJSON_CONFIG_FILE
@@ -233,13 +286,14 @@ namespace ejson
 
     inline bool ParseNumber(string_view str, number& result)
     {
+        size_t strSize = StringSize(str);
         number sign = 1.0;
         bool decimalFound = false;
         bool digitFound = false;
         number decimalFactor = 0.1f;
         result = 0.0;
 
-        if (str.size() == 0)
+        if (strSize == 0)
             return false;
 
         size_t i = 0;
@@ -249,7 +303,7 @@ namespace ejson
             ++i;
         }
 
-        for (; i < str.size() && str[i] != EJSON_TEXT('e') && str[i] != EJSON_TEXT('E'); ++i) 
+        for (; i < strSize && str[i] != EJSON_TEXT('e') && str[i] != EJSON_TEXT('E'); ++i) 
         {
             if (IsDigit(str[i])) 
             {
@@ -275,11 +329,11 @@ namespace ejson
             }
         }
 
-        if (i < str.size() && (str[i] == EJSON_TEXT('e') || str[i] == EJSON_TEXT('E'))) 
+        if (i < strSize && (str[i] == EJSON_TEXT('e') || str[i] == EJSON_TEXT('E'))) 
         {
             ++i;
 
-            if (i >= str.size())
+            if (i >= strSize)
                 return false;
 
             number exponentSign = 1.0;
@@ -293,11 +347,11 @@ namespace ejson
                 ++i;
             }
 
-            if (i >= str.size())
+            if (i >= strSize)
                 return false;
 
             number exponent = 0.0;
-            for (; i < str.size(); ++i) 
+            for (; i < strSize; ++i) 
             {
                 if (!IsDigit(str[i])) 
                 {
@@ -316,24 +370,9 @@ namespace ejson
         return true;
     }
 
-    inline void WriteNumber(number value, string& output)
-    {
-#if EJSON_WCHAR
-        // beurk, no std::to_wstring
-        std::wstringstream wss;
-        wss << value;
-        output = wss.str();
-#else
-        output = std::to_string(value);
-#endif
-    }
-
     class Value
     {
     public:
-
-        using ArrayType = vector<Value>;
-        using ObjectType = map<string, Value>;
 
         enum class Type : std::uint8_t
         {
@@ -355,7 +394,7 @@ namespace ejson
 
         Value(Value&& value)
         {
-            Set(std::forward<Value>(value));
+            Set(EJSON_FORWARD<Value>(value));
         }
 
         ~Value()
@@ -423,13 +462,13 @@ namespace ejson
                     SetNumber(other.AsNumber());
                     break;
                 case Type::String:
-                    SetString(std::forward<string>(other.AsString()));
+                    SetString(EJSON_FORWARD<string>(other.AsString()));
                     break;
                 case Type::Array:
-                    SetArray(std::forward<ArrayType>(other.AsArray()));
+                    SetArray(EJSON_FORWARD<vector<Value>>(other.AsArray()));
                     break;
                 case Type::Object:
-                    SetObject(std::forward<ObjectType>(other.AsObject()));
+                    SetObject(EJSON_FORWARD<map<string, Value>>(other.AsObject()));
                     break;
             }
             other.type = Type::Invalid;
@@ -458,10 +497,12 @@ namespace ejson
                     ((string*)buffer)->~string();
                     break;
                 case Type::Array:
-                    ((ArrayType*)buffer)->~ArrayType();
+                    using vectorType = vector<Value>;
+                    ((vectorType*)buffer)->~vectorType();
                     break;
                 case Type::Object:
-                    ((ObjectType*)buffer)->~ObjectType();
+                    using mapType = map<string, Value>;
+                    ((mapType*)buffer)->~mapType();
                     break;
             }
             type = Type::Invalid;
@@ -516,6 +557,8 @@ namespace ejson
         {
             SetInvalid();
             type = Type::Number;
+            static_assert(sizeof(number) <= ValueSize);
+            static_assert(alignof(number) <= ValueAlign);
             AsNumber() = value;
         }
 
@@ -548,7 +591,9 @@ namespace ejson
         {
             SetInvalid();
             type = Type::String;
-            new (buffer) string(std::forward<string>(value));
+            static_assert(sizeof(string) <= ValueSize);
+            static_assert(alignof(string) <= ValueAlign);
+            new (buffer) string(EJSON_FORWARD<string>(value));
         }
 
         string& AsString()
@@ -569,27 +614,29 @@ namespace ejson
             return type == Type::Array;
         }
 
-        void SetArray( const ArrayType& value )
+        void SetArray( const vector<Value>& value )
         {
             SetInvalid();
             type = Type::Array;
-            new (buffer) ArrayType(value);
+            new (buffer) vector<Value>(value);
         }
 
-        void SetArray( ArrayType&& value )
+        void SetArray( vector<Value>&& value )
         {
             SetInvalid();
             type = Type::Array;
-            new (buffer) ArrayType(std::forward<ArrayType>(value));
+            static_assert(sizeof(vector<Value>) <= ValueSize);
+            static_assert(alignof(vector<Value>) <= ValueAlign);
+            new (buffer) vector<Value>(EJSON_FORWARD<vector<Value>>(value));
         }
 
-        ArrayType& AsArray()
+        vector<Value>& AsArray()
         {
             EJSON_ASSERT(type == Type::Array, "expected type: array");
-            return *(ArrayType*)buffer;
+            return *(vector<Value>*)buffer;
         }
 
-        const ArrayType& AsArray() const
+        const vector<Value>& AsArray() const
         {
             return const_cast<Value*>(this)->AsArray();
         }
@@ -601,27 +648,31 @@ namespace ejson
             return type == Type::Object;
         }
 
-        void SetObject( const ObjectType& value )
+        void SetObject( const map<string, Value>& value )
         {
             SetInvalid();
             type = Type::Object;
-            new (buffer) ObjectType(value);
+            static_assert(sizeof(map<string, Value>) <= ValueSize);
+            static_assert(alignof(map<string, Value>) <= ValueAlign);
+            new (buffer) map<string, Value>(value);
         }
 
-        void SetObject( ObjectType&& value )
+        void SetObject( map<string, Value>&& value )
         {
             SetInvalid();
             type = Type::Object;
-            new (buffer) ObjectType(std::forward<ObjectType>(value));
+            static_assert(sizeof(map<string, Value>) <= ValueSize);
+            static_assert(alignof(map<string, Value>) <= ValueAlign);
+            new (buffer) map<string, Value>(EJSON_FORWARD<map<string, Value>>(value));
         }
 
-        ObjectType& AsObject()
+        map<string, Value>& AsObject()
         {
             EJSON_ASSERT(type == Type::Object, "expected type: object");
-            return *(ObjectType*)buffer;
+            return *(map<string, Value>*)buffer;
         }
 
-        const ObjectType& AsObject() const
+        const map<string, Value>& AsObject() const
         {
             return const_cast<Value*>(this)->AsObject();
         }
@@ -629,7 +680,7 @@ namespace ejson
         Value& operator[](size_t index)
         {
             static Value invalid;
-            if (IsArray() && index < AsArray().size())
+            if (IsArray() && index < VectorSize(AsArray()))
             {
                 return AsArray()[index];
             }
@@ -658,8 +709,8 @@ namespace ejson
 
     private:
 
-        static constexpr size_t ValueSize = std::max(std::max(std::max(sizeof(ArrayType), sizeof(ObjectType)), sizeof(string)), sizeof(number));
-        static constexpr size_t ValueAlign = std::max(std::max(std::max(alignof(ArrayType), alignof(ArrayType)), alignof(string)), alignof(number));
+        static constexpr size_t ValueSize = std::max(std::max(std::max(sizeof(vector<Value>), sizeof(map<string, void*>)), sizeof(string)), sizeof(number));
+        static constexpr size_t ValueAlign = std::max(std::max(std::max(alignof(vector<Value>), alignof(map<string, void*>)), alignof(string)), alignof(number));
 
         alignas(ValueAlign) char buffer[ValueSize];
         Type type = Type::Invalid;
@@ -699,7 +750,7 @@ namespace ejson
         }
 
         ParserError GetError() const { return error; }
-        bool HaveError() const { return error.Error.size() != 0; }
+        bool HaveError() const { return StringSize(error.Error) != 0; }
 
     private:
 
@@ -798,13 +849,13 @@ namespace ejson
 
         bool ParseNumber()
         {
-            value.clear();
+            StringClear(value);
 
             if (cur == L'-')
             {
                 if (!Read())
                     return ReportError(EJSON_TEXT("invalid number"));
-                value.push_back(L'-');
+                StringAdd(value, EJSON_TEXT('-'));
             }
 
             bool valid = false;
@@ -814,7 +865,7 @@ namespace ejson
                 if (!valid && cur == L'.')
                     return ReportError(EJSON_TEXT("invalid number"));
 
-                value.push_back(cur);
+                StringAdd(value, cur);
                 valid = true;
                 if ((next < EJSON_TEXT('0') || next > EJSON_TEXT('9')) && next != L'.')
                     break;
@@ -831,7 +882,7 @@ namespace ejson
         {
             EJSON_ASSERT(cur == EJSON_TEXT('"'), "internal error");
 
-            value.clear();
+            StringClear(value);
 
             while (true)
             {
@@ -841,7 +892,7 @@ namespace ejson
                 if (cur == L'"')
                     return true;
 
-                value.push_back(cur);
+                StringAdd(value, cur);
 
                 // skip '\'
                 if (cur == L'\\')
@@ -863,14 +914,14 @@ namespace ejson
                         for(int i = 0; i < 4; ++i)
                         {
                             Read();
-                            value.push_back(cur);
+                            StringAdd(value, cur);
                             if (next < L'0' || next > '9')
                                 return ReportError(EJSON_TEXT("escape \\u in string must be followed by 4 numbers"));
                         }
                     }
 
                     Read();
-                    value.push_back(cur);
+                    StringAdd(value, cur);
                 }
             }
         }
@@ -1103,7 +1154,7 @@ namespace ejson
         void WriteNumber(number value)
         {
             WriteValueBegin();
-            tmpString.clear();
+            StringClear(tmpString); // not needed ?
             ::ejson::WriteNumber(value, tmpString);
             writer->Write(tmpString);
             WriteValueEnd();
@@ -1251,19 +1302,19 @@ namespace ejson
 
         void PushState(StateType type)
         {
-            states.emplace_back(State{0,0,type});
+            VectorEmplace(states, State{ 0,0,type });
         }
 
         void PopState()
         {
-            EJSON_ASSERT(states.size() > 0, "internal error");
-            states.pop_back();
+            EJSON_ASSERT(VectorSize(states) > 0, "internal error");
+            VectorRemoveLast(states);
         }
 
         State& GetState(size_t depth = 0)
         {
-            EJSON_ASSERT(states.size() > 0, "internal error");
-            return states[states.size() - (1 + depth)];
+            EJSON_ASSERT(VectorSize(states) > 0, "internal error");
+            return states[VectorSize(states) - (1 + depth)];
         }
 
         vector<State> states;
@@ -1296,7 +1347,7 @@ namespace ejson
 
         bool Read(string_char& car)
         {
-            if (position < stringView.size())
+            if (position < StringSize(stringView))
             {
                 car = stringView[position];
                 ++position;
@@ -1337,14 +1388,14 @@ namespace ejson
 
         bool Write(string_char car)
         {
-            string->push_back(car);
+            StringAdd(*string, car);
             return true;
         }
 
         size_t Write(const string_view& str)
         {
-            string->append(::ejson::string(str));
-            return str.size();
+            StringAdd(*string, ::ejson::string(str));
+            return StringSize(str);
         }
 
         string ToString() const { return *string; }
@@ -1398,14 +1449,12 @@ namespace ejson
 
         bool Write(string_char car)
         {
-            stream << car;
-            return true;
+            return StreamWrite(stream, car);
         }
 
         size_t Write(const string_view& str)
         {
-            stream << str;
-            return str.size();
+            return StreamWrite(stream, str);
         }
 
     private:
@@ -1417,22 +1466,20 @@ namespace ejson
     {
         ValueReader(Value& json)
             : root(json)
-        {
-            propertyName.reserve(64);
-        }
+        {}
 
         void ObjectBegin()
         {
             Value value;
-            value.SetObject(Value::ObjectType());
-            Value* objectValue = SetValue(std::move(value));
-            contexts.emplace_back(objectValue);            
+            value.SetObject(map<string, Value>());
+            Value* objectValue = SetValue(EJSON_MOVE(value));
+            VectorEmplace(contexts, EJSON_MOVE(objectValue));
         }
 
         void ObjectEnd()
         {
             EJSON_ASSERT(GetContext().IsObject(), "object type expected");
-            contexts.pop_back();
+            VectorRemoveLast(contexts);
         }
 
         void PropertyBegin(const string_view& key)
@@ -1447,36 +1494,36 @@ namespace ejson
         void ArrayBegin()
         {
             Value value;
-            value.SetArray(Value::ArrayType());
-            Value* arrayValue = SetValue(std::move(value));
-            contexts.emplace_back(arrayValue);
+            value.SetArray(vector<Value>());
+            Value* arrayValue = SetValue(EJSON_MOVE(value));
+            VectorEmplace(contexts, EJSON_MOVE(arrayValue));
         }
 
         void ArrayEnd()
         {
             EJSON_ASSERT(GetContext().IsArray(), "array type expected");
-            contexts.pop_back();
+            VectorRemoveLast(contexts);
         }
 
         void ValueBool(bool b)
         {
             Value value;
             value.SetBool(b);
-            SetValue(std::move(value));
+            SetValue(EJSON_MOVE(value));
         }
 
         void ValueNull()
         {
             Value value;
             value.SetNull();
-            SetValue(std::move(value));
+            SetValue(EJSON_MOVE(value));
         }
 
         void ValueString(const string_view& str)
         {
             Value value;
             value.SetString(string(str));
-            SetValue(std::move(value));
+            SetValue(EJSON_MOVE(value));
         }
 
         void ValueNumber(const string_view& str)
@@ -1485,7 +1532,7 @@ namespace ejson
             ParseNumber(str, number);
             Value value;
             value.SetNumber(number);
-            SetValue(std::move(value));
+            SetValue(EJSON_MOVE(value));
         }
 
     private:
@@ -1496,13 +1543,13 @@ namespace ejson
 
         Value& GetContext()
         {
-            EJSON_ASSERT(contexts.size() > 0, "internal error");
-            return *contexts[contexts.size() - 1];
+            EJSON_ASSERT( VectorSize(contexts) > 0, "internal error");
+            return *contexts[VectorSize(contexts) - 1];
         }
 
         Value* SetValue(Value&& value)
         {
-            if (contexts.size() == 0)
+            if (VectorSize(contexts) == 0)
             {
                 root = value;
                 return &root;
@@ -1513,16 +1560,15 @@ namespace ejson
 
                 if (context.IsArray())
                 {
-                    Value::ArrayType& array = context.AsArray();
-                    array.emplace_back(std::forward<Value&>(value));
-                    Value* addedValue = array.data() + array.size() - 1;
+                    vector<Value>& array = context.AsArray();
+                    VectorEmplace(array, EJSON_FORWARD<Value>(value));
+                    Value* addedValue = &array[VectorSize(array) -1];
                     return addedValue;
                 }
                 else if (context.IsObject())
                 {
-                    EJSON_ASSERT(propertyName.size() != 0, "current object key not set");
-                    Value::ObjectType& object = context.AsObject();
-                    Value* addOrExistingValue = MapTryEmplace(object, string(propertyName), std::forward<Value>(value));
+                    map<string, Value>& object = context.AsObject();
+                    Value* addOrExistingValue = MapTryEmplace(object, string(propertyName), EJSON_FORWARD<Value>(value));
                     return addOrExistingValue;
                 }
                 else
@@ -1576,7 +1622,7 @@ namespace ejson
                 case Value::Type::Array:
                 {
                     jsonWriter.WriteArrayBegin();
-                    const Value::ArrayType& array = value.AsArray();
+                    const vector<Value>& array = value.AsArray();
                     for (const Value& v : array)
                         Write(v);
                     jsonWriter.WriteArrayEnd();
@@ -1585,11 +1631,11 @@ namespace ejson
                 case Value::Type::Object:
                 {
                     jsonWriter.WriteObjectBegin();
-                    const Value::ObjectType& object = value.AsObject();
-                    for (const auto& p : object)
+                    const map<string, Value>& object = value.AsObject();
+                    for (const auto& [key, v] : object)
                     {
-                        jsonWriter.WriteProperty(p.first);
-                        Write(p.second);
+                        jsonWriter.WriteProperty(key);
+                        Write(v);
                     }
                     jsonWriter.WriteObjectEnd();
                     break;
@@ -1598,7 +1644,9 @@ namespace ejson
         }
 
     private:
+
         JSON_WRITER& jsonWriter;
+
     };
 
     // Json
@@ -1656,7 +1704,7 @@ namespace ejson
 
     inline void Write(const Value& value, string& str, bool prettify /*= false*/)
     {
-        str.clear();
+        StringClear(str);
         StringWriter stringWriter(str);
         if (!prettify)
         {
