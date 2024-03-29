@@ -1,9 +1,11 @@
 #pragma once
 
+#include <fstream>
 #include <map>
 #include <string_view>
 #include <vector>
 #include <sstream>
+#include <unordered_map>
 
 //
 // Configurations
@@ -40,6 +42,21 @@
     #define EJON_INTERNAL_ERROR(msg) EJSON_ERROR(msg)
 #endif
 
+// for custom map container, define EJSON_MAP_CUSTOM to 1 and implement this in esjon namespace:
+//      #define EJSON_MAP_CUSTOM 1
+//      template<typename KEY, typename VALUE>
+//      using map = ...;
+//      template<typename KEY, typename VALUE>
+//      VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key){...}
+//      template<typename KEY, typename VALUE>
+//      VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value) {...}
+//
+//  see OrderedMap below for reference.
+#define EJSON_MAP_CUSTOM 0
+
+// keep insertion/parsing order ? use full for tooling. for serialization when order don't matter, set this to 0 for speed/
+#define EJSON_MAP_ORDERED 1
+
 namespace ejson
 {
     using string_char = EJSON_STRING_CHAR;
@@ -49,10 +66,6 @@ namespace ejson
     // vector implementation
     template<typename VALUE>
     using vector = std::vector<VALUE>;
-
-    // map implementation
-    template<typename KEY, typename VALUE>
-    using map = std::map<KEY, VALUE>;
 
     // double or float
     using number = double;
@@ -167,6 +180,136 @@ namespace ejson
 #endif
     }
 
+    template<typename KEY, typename VALUE>
+    class OrderedMap
+    {
+
+    public:
+
+        using KeyValuePair = std::pair<const KEY&, const VALUE&>;
+
+        class Iterator
+        {
+            using key_iterator = typename std::vector<KEY>::const_iterator;
+            const OrderedMap* dict;
+            key_iterator it;
+
+        public:
+
+            Iterator(const OrderedMap* dict, key_iterator it) : dict(dict), it(it) {}
+
+            Iterator& operator++()
+            {
+                ++it;
+                return *this;
+            }
+
+            bool operator!=(const Iterator& other) const
+            {
+                return it != other.it;
+            }
+
+            KeyValuePair operator*() const
+            {
+                const KEY& key = *it;
+                return KeyValuePair(key, dict->map.at(key));
+            }
+        };
+
+        Iterator begin() const { return Iterator(this, keys.begin()); }
+        Iterator end() const { return Iterator(this, keys.end()); }
+
+        size_t size() const { return map.size(); }
+
+        VALUE& operator[](const KEY& key)
+        {
+            VALUE* existing = Find(key);
+            if (existing)
+                return *existing;
+            return *TryEmplace(key, {});
+        }
+
+        const VALUE& operator[](const KEY& key) const
+        {
+            return map[key];
+        }
+
+        auto emplace(const KEY& key, VALUE&& value)
+        {
+            auto result = map.emplace(key, std::forward<VALUE>(value));
+            if (result.second)
+                keys.push_back(key);
+            return result;
+        }
+
+        // try add a new value and return it pointer, else return pointer of existing value
+        VALUE* TryEmplace(const KEY& key, const VALUE&& value)
+        {
+            auto result = map.try_emplace(key, std::move(value));
+            if (result.second)
+                keys.push_back(result.first->first);
+            return &result.first->second;
+        }
+
+        // find an entry, return it's value ptr if exist, else nullptr
+        VALUE* Find(const KEY& key)
+        {
+            auto it =  map.find(key);
+            if (it != map.end())
+                return &it->second;
+            else
+                return nullptr;
+        }
+
+    private:
+
+        std::vector<KEY> keys;
+        std::unordered_map<KEY, VALUE> map;
+    };
+
+#if !EJSON_MAP_CUSTOM
+
+#if EJSON_MAP_ORDERED
+
+    template<typename KEY, typename VALUE>
+    using map = OrderedMap<KEY, VALUE>;
+
+    template<typename KEY, typename VALUE>
+    VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key)
+    {
+        return m.Find(key);
+    }
+
+    template<typename KEY, typename VALUE>
+    VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value)
+    {
+        return m.TryEmplace(key, std::forward<VALUE>(value));
+    }
+
+#else // #if EJSON_MAP_ORDERED
+    template<typename KEY, typename VALUE>
+    using map = std::map<KEY, VALUE>;
+
+    template<typename KEY, typename VALUE>
+    VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key)
+    {
+        auto result = m.find(key);
+        if (result != m.end())
+            return &result->second;
+        else
+            return nullptr;
+    }
+
+    template<typename KEY, typename VALUE>
+    VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value)
+    {
+        auto [it, success] = m.try_emplace(key, std::forward<VALUE>(value));
+        return &(it->second);
+    }
+#endif // #if EJSON_MAP_ORDERED
+#endif // !EJSON_MAP_CUSTOM
+
+
     class Value
     {
     public:
@@ -194,7 +337,7 @@ namespace ejson
 
         Value(Value&& value)
         {
-            Set(std::move(value));
+            Set(std::forward<Value>(value));
         }
 
         ~Value()
@@ -262,13 +405,13 @@ namespace ejson
                     SetNumber(other.AsNumber());
                     break;
                 case Type::String:
-                    SetString(std::move(other.AsString()));
+                    SetString(std::forward<string>(other.AsString()));
                     break;
                 case Type::Array:
-                    SetArray(std::move(other.AsArray()));
+                    SetArray(std::forward<ArrayType>(other.AsArray()));
                     break;
                 case Type::Object:
-                    SetObject(std::move(other.AsObject()));
+                    SetObject(std::forward<ObjectType>(other.AsObject()));
                     break;
             }
             other.type = Type::Invalid;
@@ -387,7 +530,7 @@ namespace ejson
         {
             SetInvalid();
             type = Type::String;
-            new (buffer) string(std::move(value));
+            new (buffer) string(std::forward<string>(value));
         }
 
         string& AsString()
@@ -419,7 +562,7 @@ namespace ejson
         {
             SetInvalid();
             type = Type::Array;
-            new (buffer) ArrayType(std::move(value));
+            new (buffer) ArrayType(std::forward<ArrayType>(value));
         }
 
         ArrayType& AsArray()
@@ -451,7 +594,7 @@ namespace ejson
         {
             SetInvalid();
             type = Type::Object;
-            new (buffer) ObjectType(std::move(value));
+            new (buffer) ObjectType(std::forward<ObjectType>(value));
         }
 
         ObjectType& AsObject()
@@ -465,7 +608,7 @@ namespace ejson
             return const_cast<Value*>(this)->AsObject();
         }
 
-        const Value& operator[](size_t index)
+        Value& operator[](size_t index)
         {
             static Value invalid;
             if (IsArray() && index < AsArray().size())
@@ -478,14 +621,14 @@ namespace ejson
             }
         }
 
-        const Value& operator[](string_view str)
+        Value& operator[](string_view str)
         {
             static Value invalid;
             if (IsObject())
             {
-                auto result = AsObject().find(string(str));
-                if (result != AsObject().end())
-                    return result->second;
+                Value* value = MapFind(AsObject(), string(str));
+                if (value)
+                    return *value;
                 else
                     return invalid;
             }
@@ -1196,6 +1339,32 @@ namespace ejson
         string* string = nullptr;
     };
 
+    class StreamReader
+    {
+    public:
+
+        StreamReader(std::basic_istream<string_char>& stream)
+            : stream(stream)
+        {}
+
+        StreamReader(const StreamReader&) = delete;
+        StreamReader& operator=(const StreamReader&) = delete;
+        ~StreamReader(){}
+
+        bool Read(string_char& car)
+        {
+            if (stream.get(car))
+                return true;
+            else
+                return false;
+        }
+
+    private:
+
+        std::basic_istream<string_char>& stream;
+
+    };
+
     struct ValueReader
     {
         ValueReader(Value& json)
@@ -1300,7 +1469,7 @@ namespace ejson
                 if (context.IsArray())
                 {
                     Value::ArrayType& array = context.AsArray();
-                    array.emplace_back(std::move(value));
+                    array.emplace_back(std::forward<Value&>(value));
                     Value* addedValue = array.data() + array.size() - 1;
                     return addedValue;
                 }
@@ -1308,8 +1477,8 @@ namespace ejson
                 {
                     EJSON_ASSERT(propertyName.size() != 0, "current object key not set");
                     Value::ObjectType& object = context.AsObject();
-                    auto [it, success] = object.try_emplace(string(propertyName), std::move(value));
-                    return &(it->second);
+                    Value* addOrExistingValue = MapTryEmplace(object, string(propertyName), std::forward<Value>(value));
+                    return addOrExistingValue;
                 }
                 else
                 {
@@ -1394,10 +1563,8 @@ namespace ejson
 
         static bool Read(string_view json, Value& value)
         {
-            StringReader stringReader(json);
-            ValueReader valueReader(value);
-            JsonReader jsonReader(valueReader, stringReader);
-            return jsonReader.Parse();
+            ParserError error;
+            return Read(json, value, error);
         }
 
         static bool Read(string_view json, Value& value, ParserError& error)
@@ -1415,6 +1582,29 @@ namespace ejson
                 return false;
             }
         }
+
+        static bool Read(std::basic_ifstream<wchar_t>& stream, Value& value)
+        {
+            ParserError error;
+            return Read(stream, value, error);
+        }
+
+        static bool Read(std::basic_istream<string_char>& stream, Value& value, ParserError& error)
+        {
+            StreamReader streamReader(stream);
+            ValueReader valueReader(value);
+            JsonReader jsonReader(valueReader, streamReader);
+            if (jsonReader.Parse())
+            {
+                return true;
+            }
+            else
+            {
+                error = jsonReader.GetError();
+                return false;
+            }
+        }
+
 
         static void Write(const Value& value, string& str, bool prettify = false)
         {

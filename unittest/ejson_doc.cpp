@@ -4,15 +4,13 @@
 
 #include <ejson/ejson.h>
 
-namespace playground
+namespace doc
 {
-    
+#if EJSON_WCHAR
+    using namespace ejson;
+
     TEST_CASE("doc_intro")
     {
-        using namespace ejson;        
-
-    #if EJSON_WCHAR
-
         string jsonInput = L"{\"name\":\"John\"}";
         Value value;
         // read input to Value
@@ -33,6 +31,43 @@ namespace playground
         std::wcout << L"prettify:" << std::endl;
         std::wcout << prettifyOutput << std::endl << std::endl;
 
-    #endif
     }
+
+    TEST_CASE("doc_file")
+    {
+        std::wifstream fileInputStream("..\\data\\john_doe.json");
+        if (fileInputStream)
+        {
+            // parse file
+            Value value;
+            Json::Read(fileInputStream, value);
+
+            // write it back to the console
+            string jsonOutput;
+            Json::Write(value, jsonOutput);
+            std::wcout << jsonOutput << std::endl;;
+        }
+    }
+
+    TEST_CASE("doc_file_err")
+    {
+        std::wifstream fileInputStream("..\\data\\john_doe_err.json");
+        if (fileInputStream)
+        {
+            // parse file
+            Value value;
+            ParserError error;
+            if (Json::Read(fileInputStream, value, error))
+            {
+                // no error ...
+            }
+            else
+            {
+                // error
+                std::wcout << "error at line/column " << error.Line << "/" << error.Column << ": " << error.Error;
+            }
+        }
+    }
+#endif
+
 }

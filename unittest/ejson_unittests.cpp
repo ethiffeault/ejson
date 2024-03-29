@@ -80,8 +80,8 @@ namespace test_value
 
         value.AsObject().emplace(EJSON_TEXT("1212"), Value());
         REQUIRE(value.AsObject().size() == 1);
-        value.AsObject()[EJSON_TEXT("1212")].SetBool(true);
-        REQUIRE(value.AsObject()[EJSON_TEXT("1212")].AsBool() == true);
+        value[EJSON_TEXT("1212")].SetBool(true);
+        REQUIRE(value[EJSON_TEXT("1212")].AsBool() == true);
     }
 }
 
@@ -270,9 +270,3 @@ namespace test_parser
     }
 }
 
-namespace test_X
-{
-    TEST_CASE("test_X")
-    {
-    }
-}
