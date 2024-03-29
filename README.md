@@ -2,9 +2,10 @@
 
 json library in c++
 
-single header c++ json library that separate parsing from processing, making it very easy to customize and implement json serialization for any rtti library. Parsing and processing are stream friendly to minimize memory footprint for large json file.
+Single header c++ json library that separate parsing from processing, making it very easy to customize and implement json serialization for any rtti library. Parsing and processing are stream friendly to minimize memory footprint for large json file. Support both char and wide char.
 
 ejson provide a "Value" type to handle underlying json type (null, bool, number, string, array and object)
+
 
 read json from string:
 ```cpp
