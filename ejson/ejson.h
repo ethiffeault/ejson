@@ -19,12 +19,14 @@
     #define EJSON_STRING std::wstring
     #define EJSON_TEXT(str) L##str
     #define EJSON_STREAM_INPUT std::basic_istream<wchar_t>
+    #define EJSON_STREAM_OUTPUT std::basic_ostream<wchar_t>
 #else
     #define EJSON_STRING_CHAR char
     #define EJSON_STRING_VIEW std::string_view
     #define EJSON_STRING std::string
     #define EJSON_TEXT(str) str
     #define EJSON_STREAM_INPUT std::basic_istream<char>
+    #define EJSON_STREAM_OUTPUT std::basic_ostream<char>
 #endif
 
 // error handling
@@ -70,6 +72,7 @@ namespace ejson
     using vector = std::vector<VALUE>;
 
     using input_stream = EJSON_STREAM_INPUT;
+    using output_stream = EJSON_STREAM_OUTPUT;
 
     // double or float
     using number = double;
@@ -1369,6 +1372,39 @@ namespace ejson
 
     };
 
+    class StreamWriter
+    {
+
+    public:
+
+
+        StreamWriter(output_stream& stream)
+            : stream(stream)
+        {}
+
+        StreamWriter(const StringWriter&) = delete;
+        StreamWriter& operator=(const StreamWriter&) = delete;
+
+        ~StreamWriter(){}
+
+
+        bool Write(string_char car)
+        {
+            stream << car;
+            return true;
+        }
+
+        size_t Write(const string_view& str)
+        {
+            stream << str;
+            return str.size();
+        }
+
+    private:
+
+        output_stream& stream;
+    };
+
     struct ValueReader
     {
         ValueReader(Value& json)
@@ -1606,7 +1642,6 @@ namespace ejson
             }
         }
 
-
         static void Write(const Value& value, string& str, bool prettify = false)
         {
             str.clear();
@@ -1620,6 +1655,23 @@ namespace ejson
             else
             {
                 JsonWriter<StringWriter, true> jsonWriter(stringWriter);
+                ValueWriter valueWriter(jsonWriter);
+                valueWriter.Write(value);
+            }
+        }
+
+        static void Write(const Value& value, output_stream& stream, bool prettify = false)
+        {
+            StreamWriter streamWriter(stream);
+            if (!prettify)
+            {
+                JsonWriter jsonWriter(streamWriter);
+                ValueWriter valueWriter(jsonWriter);
+                valueWriter.Write(value);
+            }
+            else
+            {
+                JsonWriter<StreamWriter, true> jsonWriter(streamWriter);
                 ValueWriter valueWriter(jsonWriter);
                 valueWriter.Write(value);
             }

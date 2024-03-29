@@ -9,7 +9,7 @@ ejson provide a "Value" type to handle underlying json type (null, bool, number,
 
 simple usage:
 read json from string
-```
+```cpp
     string jsonInput = L"{\"name\":\"John\"}";
     Value value;
     // read input to Value
@@ -20,7 +20,7 @@ read json from string
     value name is : John
 ```
 write it back to a string
-```
+```cpp
     string jsonOutput;
     Json::Write(value, jsonOutput);
 
@@ -33,22 +33,22 @@ write it back to a string
     {"name":"John"}
 ```
 write prettify json to string
-```
+```cpp
     // for prettify output
     string prettifyOutput;
     Json::Write(value, prettifyOutput, true);
     std::wcout << prettifyOutput << std::endl << std::endl;
 
 ```
-```
+```json
     {
         "name": "John"
     }
 ```
 
 ## File
-read from file :
-```
+### Read
+```cpp
     std::wifstream fileInputStream("..\\data\\john_doe.json");
     if (fileInputStream)
     {
@@ -62,13 +62,37 @@ read from file :
         std::wcout << jsonOutput;
     }
 ```
-```
+```json
     {"FirstName":"John","LastName":"Doe","Age":71,"Music":["punk","country","folk"]}
 ```
+### Write
+read from file and write back to another file in prettify format
+```cpp
+    // read
+    std::wifstream fileInputStream("..\\data\\john_doe.json");
+    Value value;
+    Json::Read(fileInputStream, value);
 
+    // write
+    std::wofstream fileOutputStream("..\\data\\john_doe_output.json");
+    Json::Write(value, fileOutputStream, true);
+```
+john_doe_output.json:
+```json
+{
+    "FirstName": "John",
+    "LastName": "Doe",
+    "Age": 71,
+    "Music": [
+        "punk",
+        "country",
+        "folk"
+    ]
+}
+```
 ## Error
 read file with error:
-```
+```cpp
     std::wifstream fileInputStream("..\\data\\john_doe_err.json");
     if (fileInputStream)
     {
@@ -95,24 +119,24 @@ read file with error:
 modify configuration at the beginning of ejson.h
 
 ### char/wchar_t
-```
+```cpp
     #define EJSON_WCHAR 1 // wchar_t (default)
     #define EJSON_WCHAR 0 // char
 ```
 ### Assert
-```
-    #define EJSON_ASSERT (default impl use cassert)
+```cpp
+    #define EJSON_ASSERT // (default impl use cassert)
     #define EJSON_ERROR 
 ```
 ### float/double
-```
-    using number = double; (default)
+```cpp
+    using number = double; // (default)
     using number = float;
 ```
 ### order ot not
-```
-#define EJSON_MAP_ORDERED 1 (default, keep load/write order)
-#define EJSON_MAP_ORDERED 0 (faster, don't keep order, suitable for final build that only load)
+```cpp
+#define EJSON_MAP_ORDERED 1 // (default, keep load/write order)
+#define EJSON_MAP_ORDERED 0 // (faster, don't keep order, suitable for final build that only load)
 ```
 ## Others
 

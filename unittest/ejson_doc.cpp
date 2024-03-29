@@ -46,6 +46,13 @@ namespace doc
             string jsonOutput;
             Json::Write(value, jsonOutput);
             std::wcout << jsonOutput << std::endl;;
+
+            // write it back to another file and prettify
+            std::wofstream fileOutputStream("..\\data\\john_doe_output.json");
+            if (fileOutputStream)
+            {
+                Json::Write(value, fileOutputStream, true);
+            }
         }
     }
 
