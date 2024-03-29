@@ -112,7 +112,7 @@ modify configuration at the beginning of ejson.h
 ### order ot not
 ```
 #define EJSON_MAP_ORDERED 1 (default, keep load/write order)
-#define EJSON_MAP_ORDERED 0 (faster, don't keep order, suitable for final build when only use loading)
+#define EJSON_MAP_ORDERED 0 (faster, don't keep order, suitable for final build that only load)
 ```
 ## Others
 

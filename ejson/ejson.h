@@ -18,11 +18,13 @@
     #define EJSON_STRING_VIEW std::wstring_view
     #define EJSON_STRING std::wstring
     #define EJSON_TEXT(str) L##str
+    #define EJSON_STREAM_INPUT std::basic_istream<wchar_t>
 #else
     #define EJSON_STRING_CHAR char
     #define EJSON_STRING_VIEW std::string_view
     #define EJSON_STRING std::string
     #define EJSON_TEXT(str) str
+    #define EJSON_STREAM_INPUT std::basic_istream<char>
 #endif
 
 // error handling
@@ -66,6 +68,8 @@ namespace ejson
     // vector implementation
     template<typename VALUE>
     using vector = std::vector<VALUE>;
+
+    using input_stream = EJSON_STREAM_INPUT;
 
     // double or float
     using number = double;
@@ -1073,14 +1077,14 @@ namespace ejson
         void WriteNull()
         {
             WriteValueBegin();
-            writer->Write(L"null");
+            writer->Write(EJSON_TEXT("null"));
             WriteValueEnd();
         }
 
         void WriteBool(bool value)
         {
             WriteValueBegin();
-            writer->Write(value ? L"true" : L"false");
+            writer->Write(value ? EJSON_TEXT("true") : EJSON_TEXT("false"));
             WriteValueEnd();
         }
 
@@ -1096,9 +1100,9 @@ namespace ejson
         void WriteString(const string_view& value)
         {
             WriteValueBegin();
-            writer->Write(L"\"");
+            writer->Write(EJSON_TEXT("\""));
             writer->Write(value);
-            writer->Write(L"\"");
+            writer->Write(EJSON_TEXT("\""));
             WriteValueEnd();
         }
 
@@ -1107,14 +1111,14 @@ namespace ejson
             WriteValueBegin();
             WriteContainerBegin();
             PushState(StateType::Object);
-            writer->Write(L"{");
+            writer->Write(EJSON_TEXT("{"));
         }
 
         void WriteObjectEnd()
         {
             EJSON_ASSERT(GetState().Type == StateType::Object, "internal error");
             WriteContainerEnd();
-            writer->Write(L"}");
+            writer->Write(EJSON_TEXT("}"));
             WriteValueEnd();
         }
 
@@ -1124,12 +1128,12 @@ namespace ejson
             EJSON_ASSERT(root.Type == StateType::Object, "internal error");
             WriteValuePrefix();
             PushState(StateType::Property);
-            writer->Write(L"\"");
+            writer->Write(EJSON_TEXT("\""));
             writer->Write(name);
-            writer->Write(L"\"");
-            writer->Write(L":");
+            writer->Write(EJSON_TEXT("\""));
+            writer->Write(EJSON_TEXT(":"));
             if constexpr (PRETTIFY)
-                writer->Write(L" ");
+                writer->Write(EJSON_TEXT(" "));
         }
 
         void WriteArrayBegin()
@@ -1137,14 +1141,14 @@ namespace ejson
             WriteValueBegin();
             WriteContainerBegin();
             PushState(StateType::Array);
-            writer->Write(L"[");
+            writer->Write(EJSON_TEXT("["));
         }
 
         void WriteArrayEnd()
         {
             EJSON_ASSERT(GetState().Type == StateType::Array, "internal error");
             WriteContainerEnd();
-            writer->Write(L"]");
+            writer->Write(EJSON_TEXT("]"));
             WriteValueEnd();
         }
 
@@ -1176,12 +1180,12 @@ namespace ejson
         void WriteValuePrefix()
         {
             if (GetState().Count != 0)
-                writer->Write(L",");
+                writer->Write(EJSON_TEXT(","));
             if constexpr (PRETTIFY)
             {
                 if (GetState().Type != StateType::Root)
                 {
-                    writer->Write(L"\n");
+                    writer->Write(EJSON_TEXT("\n"));
                     WriteIndentation();
                 }
             }
@@ -1221,7 +1225,7 @@ namespace ejson
             {
                 const std::int16_t previousCount = GetState().Count;
                 if (previousCount != 0)
-                    writer->Write(L"\n");
+                    writer->Write(EJSON_TEXT("\n"));
                 PopState();
                 --indentation;
                 if (previousCount != 0)
@@ -1253,7 +1257,7 @@ namespace ejson
         vector<State> states;
         STRING_WRITER* writer = nullptr;
         std::int32_t indentation = 0;
-        const wchar_t* tab = L"    ";
+        const string_char* tab = EJSON_TEXT("    ");
         string tmpString;
     };
 
@@ -1343,7 +1347,7 @@ namespace ejson
     {
     public:
 
-        StreamReader(std::basic_istream<string_char>& stream)
+        StreamReader(input_stream& stream)
             : stream(stream)
         {}
 
@@ -1361,7 +1365,7 @@ namespace ejson
 
     private:
 
-        std::basic_istream<string_char>& stream;
+        input_stream& stream;
 
     };
 
@@ -1580,13 +1584,13 @@ namespace ejson
             }
         }
 
-        static bool Read(std::basic_ifstream<wchar_t>& stream, Value& value)
+        static bool Read(input_stream& stream, Value& value)
         {
             ParserError error;
             return Read(stream, value, error);
         }
 
-        static bool Read(std::basic_istream<string_char>& stream, Value& value, ParserError& error)
+        static bool Read(input_stream& stream, Value& value, ParserError& error)
         {
             StreamReader streamReader(stream);
             ValueReader valueReader(value);
