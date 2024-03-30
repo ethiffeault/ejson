@@ -12,7 +12,7 @@ implementation
 
 read json from string:
 ```cpp
-    string input = L"{\"name\":\"John\"}";
+    std::wstring input = L"{\"name\":\"John\"}";
     ejson::Value value;
     ejson::Read(input, value);
     std::wcout << "value name is : " << value[L"name"].AsString() << std::endl;
@@ -22,7 +22,7 @@ read json from string:
 ```
 write it back to a string:
 ```cpp
-    string output;
+    std::wstring output;
     ejson::Write(value, output);
 
     if (input == output)
@@ -35,7 +35,7 @@ write it back to a string:
 ```
 write prettify json to string:
 ```cpp
-    string prettifyOutput;
+    std::wstring prettifyOutput;
     ejson::Write(value, prettifyOutput, true);
     std::wcout << prettifyOutput << std::endl << std::endl;
 
@@ -55,7 +55,7 @@ create json in typed code
         json[L"Music"][1] = L"country";
         json[L"Music"][2] = L"folk";
 
-        string str;
+        std::wstring str;
         Write(json, str);
         std::wcout << str << std::endl << std::endl;
 ```
@@ -71,7 +71,7 @@ create json in typed code
     ejson::Value value;
     ejson::Read(input, value);
 
-    string output;
+    std::wstring output;
     ejson::Write(value, output);
     std::wcout << output;
 ```
@@ -116,7 +116,7 @@ create json in typed code
         json[L"Music"][1] = L"country";
         json[L"Music"][2] = L"folk";
 
-        string str;
+        std::wstring str;
         ejson::Write(json, str);
         std::wcout << str << std::endl << std::endl;
 ```
@@ -145,7 +145,8 @@ when loading data from file in read only, to make sure to not change input Value
     ejson::Value& value = fileValue;
     if (value[L"FirstName"].IsString())
     {
-        string firstName = value[L"FirstName"].AsString();
+        std::wstring firstName = value[L"FirstName"].AsString();
+        //...
     }
 ```
 ## Error
