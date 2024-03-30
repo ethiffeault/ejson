@@ -7,8 +7,8 @@ Single header c++ [ejson.h](ejson/ejson.h) json library that separate parsing fr
 ejson provide a "Value" type to handle underlying json type (null, bool, number, string, array and object)
 
 implementation
-* std [ejson.h](ejson/ejson.h)
-* [Unreal Engine](implementation/unreal)
+* std (default)
+* [unreal](implementation/unreal)
 
 read json from string:
 ```cpp
@@ -108,7 +108,7 @@ john_doe_output.json:
 ## Json as cpp
 create json in typed code
 ```cpp
-        Value json;
+        ejson::Value json;
         json[L"FirstName"] = L"John";
         json[L"LastName"] = L"Doe";
         json[L"Age"] = 71;
@@ -117,7 +117,7 @@ create json in typed code
         json[L"Music"][2] = L"folk";
 
         string str;
-        Write(json, str);
+        ejson::Write(json, str);
         std::wcout << str << std::endl << std::endl;
 ```
 ```
@@ -125,11 +125,11 @@ create json in typed code
 ```
 could be build composed:
 ```cpp
-    Value json;
+    ejson::Value json;
     json[L"FirstName"] = L"John";
     json[L"LastName"] = L"Doe";
     json[L"Age"] = 71;
-    Value& music = json[L"Music"];
+    ejson::Value& music = json[L"Music"];
     music[0] = L"punk";
     music[1] = L"country";
     music[2] = L"folk";
@@ -141,7 +141,7 @@ when loading data from file in read only, to make sure to not change input Value
     ejson::Value fileValue;
     ejson::Read(input, fileValue);
 
-    // 
+    // use const& here to prevent appending value to fileValue
     ejson::Value& value = fileValue;
     if (value[L"FirstName"].IsString())
     {
@@ -150,7 +150,7 @@ when loading data from file in read only, to make sure to not change input Value
 ```
 ## Error
 
-read file with error:
+read with error:
 ```cpp
     std::wifstream input("..\\data\\john_doe_err.json");
     ejson::Value value;
