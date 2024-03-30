@@ -32,6 +32,39 @@ namespace doc
         std::wcout << prettifyOutput << std::endl << std::endl;
     }
 
+    TEST_CASE("doc_create")
+    {
+        {
+            Value json;
+            json[L"FirstName"] = L"John";
+            json[L"LastName"] = L"Doe";
+            json[L"Age"] = 71;
+            json[L"Music"][0] = L"punk";
+            json[L"Music"][1] = L"country";
+            json[L"Music"][2] = L"folk";
+
+            string str;
+            Write(json, str);
+            std::wcout << str << std::endl << std::endl;
+        }
+        {
+            Value json;
+            json[L"FirstName"] = L"John";
+            json[L"LastName"] = L"Doe";
+            json[L"Age"] = 71;
+            Value& music = json[L"Music"];
+            music[0] = L"punk";
+            music[1] = L"country";
+            music[2] = L"folk";
+
+            string str;
+            Write(json, str);
+            std::wcout << str << std::endl << std::endl;
+        }
+
+
+    }
+
     TEST_CASE("doc_file")
     {
         std::wifstream fileInputStream("..\\data\\john_doe.json");

@@ -202,7 +202,7 @@ namespace test_parser
                 REQUIRE(jsonValue.AsBool() == false);
             }
         }
-        
+
         // Number
         {
             StringReader stringReader(EJSON_TEXT("1"));
@@ -254,7 +254,7 @@ namespace test_parser
             JsonReader<ValueReader, StringReader> jsonReader(valueReader, stringReader);
             bool result = jsonReader.Parse();
             CHECK(result == true);
-            
+
             REQUIRE(jsonValue.IsObject());
             map<string, Value>& object = jsonValue.AsObject();
             REQUIRE(object.size() == 2);
@@ -267,6 +267,35 @@ namespace test_parser
 
         }
 
+    }
+}
+
+namespace test_parser
+{
+    using namespace ejson;
+
+    TEST_CASE("test_code")
+
+    {
+        Value json;
+        json[EJSON_TEXT("FirstName")] = EJSON_TEXT("John");
+        json[EJSON_TEXT("LastName")] = EJSON_TEXT("Doe");
+        json[EJSON_TEXT("Age")] = 71;
+        json[EJSON_TEXT("Music")][0] = EJSON_TEXT("punk");
+        json[EJSON_TEXT("Music")][1] = EJSON_TEXT("country");
+        json[EJSON_TEXT("Music")][2] = EJSON_TEXT("folk");
+        json[EJSON_TEXT("Music")][3] = 0;
+        json[EJSON_TEXT("Music")][4] = nullptr;
+        json[EJSON_TEXT("Music")][5] = true;
+        json[EJSON_TEXT("Music")][6] = false;
+        json[EJSON_TEXT("Music")][7] = 1.2f;
+        json[EJSON_TEXT("Music")][8] = 1.2;
+        json[EJSON_TEXT("Music")][9][0] = false;
+        json[EJSON_TEXT("Music")][10][EJSON_TEXT("p")] = EJSON_TEXT("v");
+
+        string str;
+        Write(json, str);
+        REQUIRE(str == EJSON_TEXT("{\"FirstName\":\"John\",\"LastName\":\"Doe\",\"Age\":71,\"Music\":[\"punk\",\"country\",\"folk\",0,null,true,false,1.2,1.2,[false],{\"p\":\"v\"}]}"));
     }
 }
 

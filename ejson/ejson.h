@@ -1,12 +1,37 @@
+//  MIT License
+//  
+//  Copyright (c) 2024 Eric Thiffeault
+//  
+//  Permission is hereby granted, free of charge, to any person obtaining a copy
+//  of this software and associated documentation files (the "Software"), to deal
+//  in the Software without restriction, including without limitation the rights
+//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the Software is
+//  furnished to do so, subject to the following conditions:
+//  
+//  The above copyright notice and this permission notice shall be included in all
+//  copies or substantial portions of the Software.
+//  
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//  SOFTWARE.
+//  
+//  https://github.com/ethiffeault/ejson
+
 #pragma once
 
 //
 // Configurations
 
 #define EJSON_CONFIG_FILE 0
+#define EJSON_IMPL_FILE 0
 
 #if EJSON_CONFIG_FILE
-    #include "ejson_config.h"
+#include "ejson_config.h"
 #else
 
 // std default implementation
@@ -22,7 +47,7 @@
 #define EJSON_FORWARD std::forward
 
 // char or wchar_t
-#define EJSON_WCHAR 1
+#define EJSON_WCHAR 0
 
 #if EJSON_WCHAR
     #define EJSON_TEXT(str) L##str
@@ -36,12 +61,12 @@
     #include <cassert>
     #include <iostream>
     #define EJSON_ASSERT(cond, msg) \
-                    do { \
-                        if (!(cond)) { \
-                            ::std::cerr << msg << ::std::endl; \
-                            assert(cond); \
-                        } \
-                    } while (0)
+                        do { \
+                            if (!(cond)) { \
+                                ::std::cerr << msg << ::std::endl; \
+                                assert(cond); \
+                            } \
+                        } while (0)
     #define EJSON_ERROR(msg) EJSON_ASSERT(true, msg)
 #endif
 
@@ -52,6 +77,20 @@ namespace ejson
 {
     // double or float
     using number = double;
+
+    // pod type
+    using s8 = std::int8_t;
+    using s16 = std::int16_t;
+    using s32 = std::int32_t;
+    using s64 = std::int64_t;
+
+    using u8 = std::uint8_t;
+    using u16 = std::uint16_t;
+    using u32 = std::uint32_t;
+    using u64 = std::uint64_t;
+
+    using f32 = std::float_t;
+    using f64 = std::double_t;
 
 #if EJSON_WCHAR
     using string_char = wchar_t;
@@ -64,7 +103,7 @@ namespace ejson
     using string_view = std::string_view;
     using string = std::string;
     using input_stream = std::basic_istream<char>;
-    using output_stream = ::basic_ostream<char>;
+    using output_stream = std::basic_ostream<char>;
 #endif
 
     template <typename T>
@@ -90,14 +129,16 @@ namespace ejson
 
     inline void WriteNumber(number value, string& output)
     {
-        #if EJSON_WCHAR
-            // beurk, no std::to_wstring
-            std::wstringstream wss;
-            wss << value;
-            output = wss.str();
-        #else
-            output = std::to_string(value);
-        #endif
+        // todo: make our own function with no allocation
+#if EJSON_WCHAR
+        std::wstringstream wss;
+        wss << value;
+        output = wss.str();
+#else
+        std::stringstream wss;
+        wss << value;
+        output = wss.str();
+#endif
     }
 
     // stream
@@ -221,6 +262,15 @@ namespace ejson
                 return nullptr;
         }
 
+        const VALUE* Find(const KEY& key) const
+        {
+            auto it = map.find(key);
+            if (it != map.end())
+                return &it->second;
+            else
+                return nullptr;
+        }
+
     private:
 
         std::vector<KEY> keys;
@@ -232,6 +282,12 @@ namespace ejson
 
     template<typename KEY, typename VALUE>
     VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key)
+    {
+        return m.Find(key);
+    }
+
+    template<typename KEY, typename VALUE>
+    const VALUE* MapFind(const map<KEY, VALUE>& m, const KEY& key)
     {
         return m.Find(key);
     }
@@ -299,39 +355,40 @@ namespace ejson
             return false;
 
         size_t i = 0;
-        if (str[i] == EJSON_TEXT('-')) 
+        if (str[i] == EJSON_TEXT('-'))
         {
             sign = -1.0;
             ++i;
         }
 
-        for (; i < strSize && str[i] != EJSON_TEXT('e') && str[i] != EJSON_TEXT('E'); ++i) 
+        for (; i < strSize && str[i] != EJSON_TEXT('e') && str[i] != EJSON_TEXT('E'); ++i)
         {
-            if (IsDigit(str[i])) 
+            if (IsDigit(str[i]))
             {
-                if (!decimalFound) 
+                if (!decimalFound)
                 {
                     digitFound = true;
                     result = result * 10 + (str[i] - EJSON_TEXT('0'));
-                } else 
+                }
+                else
                 {
                     result += (str[i] - EJSON_TEXT('0')) * decimalFactor;
                     decimalFactor /= 10;
                 }
             }
-            else if (str[i] == EJSON_TEXT('.') && !decimalFound) 
+            else if (str[i] == EJSON_TEXT('.') && !decimalFound)
             {
                 if (!digitFound)
                     return false;
                 decimalFound = true;
             }
-            else 
+            else
             {
                 return false;
             }
         }
 
-        if (i < strSize && (str[i] == EJSON_TEXT('e') || str[i] == EJSON_TEXT('E'))) 
+        if (i < strSize && (str[i] == EJSON_TEXT('e') || str[i] == EJSON_TEXT('E')))
         {
             ++i;
 
@@ -339,7 +396,7 @@ namespace ejson
                 return false;
 
             number exponentSign = 1.0;
-            if (str[i] == EJSON_TEXT('+')) 
+            if (str[i] == EJSON_TEXT('+'))
             {
                 ++i;
             }
@@ -353,15 +410,15 @@ namespace ejson
                 return false;
 
             number exponent = 0.0;
-            for (; i < strSize; ++i) 
+            for (; i < strSize; ++i)
             {
-                if (!IsDigit(str[i])) 
+                if (!IsDigit(str[i]))
                 {
                     return false;
                 }
                 exponent = exponent * 10 + (str[i] - EJSON_TEXT('0'));
             }
-            while (exponent > 0) 
+            while (exponent > 0)
             {
                 result *= exponentSign > 0.0f ? 10.0f : 0.1f;
                 --exponent;
@@ -406,7 +463,7 @@ namespace ejson
 
         Value& operator=(const Value& other)
         {
-            if (this != &other) 
+            if (this != &other)
             {
                 Set(other);
             }
@@ -483,6 +540,11 @@ namespace ejson
             return type == Type::Invalid;
         }
 
+        bool IsValid() const
+        {
+            return !IsInvalid();
+        }
+
         void SetInvalid()
         {
             switch (type)
@@ -512,6 +574,17 @@ namespace ejson
 
         // Null
 
+        Value(nullptr_t v)
+        {
+            SetNull();
+        }
+
+        Value& operator=(nullptr_t v)
+        {
+            SetNull();
+            return *this;
+        }
+
         bool IsNull() const
         {
             return type == Type::Null;
@@ -524,6 +597,17 @@ namespace ejson
         }
 
         // Bool
+
+        Value(bool v)
+        {
+            SetBool(v);
+        }
+
+        Value& operator=(const bool& v)
+        {
+            SetBool(v);
+            return *this;
+        }
 
         bool IsBool() const
         {
@@ -549,6 +633,29 @@ namespace ejson
         }
 
         // Number
+
+        Value(s8 v) { SetNumber(v); }
+        Value& operator=(s8 v) { SetNumber(v); return *this; }
+        Value(s16 v) { SetNumber(v); }
+        Value& operator=(s16 v) { SetNumber(v); return *this; }
+        Value(s32 v) { SetNumber(v); }
+        Value& operator=(s32 v) { SetNumber(v); return *this; }
+        Value(s64 v) { SetNumber((number)v); }
+        Value& operator=(s64 v) { SetNumber((number)v); return *this; }
+
+        Value(u8 v) { SetNumber(v); }
+        Value& operator=(u8 v) { SetNumber(v); return *this; }
+        Value(u16 v) { SetNumber(v); }
+        Value& operator=(u16 v) { SetNumber(v); return *this; }
+        Value(u32 v) { SetNumber(v); }
+        Value& operator=(u32 v) { SetNumber(v); return *this; }
+        Value(u64 v) { SetNumber((number)v); }
+        Value& operator=(u64 v) { SetNumber((number)v); return *this; }
+
+        Value(f32 v) { SetNumber(v); }
+        Value& operator=(f32 v) { SetNumber(v); return *this; }
+        Value(f64 v) { SetNumber((number)v); }
+        Value& operator=(f64 v) { SetNumber((number)v); return *this; }
 
         bool IsNumber() const
         {
@@ -577,12 +684,34 @@ namespace ejson
 
         // String
 
+        Value(const string& str)
+        {
+            SetString(str);
+        }
+
+        Value(const string_char* str)
+        {
+            SetString(str);
+        }
+
+        Value& operator=(const string& str)
+        {
+            SetString(str);
+            return *this;
+        }
+
+        Value& operator=(const string_char* str)
+        {
+            SetString(string(str));
+            return *this;
+        }
+
         bool IsString() const
         {
             return type == Type::String;
         }
 
-        void SetString( const string& value )
+        void SetString(const string& value)
         {
             SetInvalid();
             type = Type::String;
@@ -611,19 +740,30 @@ namespace ejson
 
         // Array
 
+        Value(const vector<Value>& value)
+        {
+            SetArray(value);
+        }
+
+        Value& operator=(const vector<Value>& value)
+        {
+            SetArray(value);
+            return *this;
+        }
+
         bool IsArray() const
         {
             return type == Type::Array;
         }
 
-        void SetArray( const vector<Value>& value )
+        void SetArray(const vector<Value>& value)
         {
             SetInvalid();
             type = Type::Array;
             new (buffer) vector<Value>(value);
         }
 
-        void SetArray( vector<Value>&& value )
+        void SetArray(vector<Value>&& value)
         {
             SetInvalid();
             type = Type::Array;
@@ -643,14 +783,37 @@ namespace ejson
             return const_cast<Value*>(this)->AsArray();
         }
 
+        Value& operator[](size_t index)
+        {
+            static Value invalid;
+            if (!IsArray())
+                SetArray({});
+            vector<Value>& array = AsArray();
+            while(VectorSize(array) <= index )
+                VectorEmplace(array, {});
+
+            return AsArray()[index];
+        }
+
         // Object
+
+        Value(const map<string, Value>& value)
+        {
+            SetObject(value);
+        }
+
+        Value& operator=(const map<string, Value>& value)
+        {
+            SetObject(value);
+            return *this;
+        }
 
         bool IsObject() const
         {
             return type == Type::Object;
         }
 
-        void SetObject( const map<string, Value>& value )
+        void SetObject(const map<string, Value>& value)
         {
             SetInvalid();
             type = Type::Object;
@@ -659,7 +822,7 @@ namespace ejson
             new (buffer) map<string, Value>(value);
         }
 
-        void SetObject( map<string, Value>&& value )
+        void SetObject(map<string, Value>&& value)
         {
             SetInvalid();
             type = Type::Object;
@@ -679,7 +842,7 @@ namespace ejson
             return const_cast<Value*>(this)->AsObject();
         }
 
-        Value& operator[](size_t index)
+        const Value& operator[](size_t index) const
         {
             static Value invalid;
             if (IsArray() && index < VectorSize(AsArray()))
@@ -692,12 +855,22 @@ namespace ejson
             }
         }
 
-        Value& operator[](string_view str)
+        Value& operator[](const string& str)
+        {
+            static Value invalid;
+            if (!IsObject())
+            {
+                SetObject({});
+            }
+            return *MapTryEmplace(AsObject(), str, {});
+        }
+
+        const Value& operator[](string_view str) const
         {
             static Value invalid;
             if (IsObject())
             {
-                Value* value = MapFind(AsObject(), string(str));
+                const Value* value = MapFind(AsObject(), string(str));
                 if (value)
                     return *value;
                 else
@@ -708,6 +881,7 @@ namespace ejson
                 return invalid;
             }
         }
+
 
     private:
 
@@ -840,7 +1014,7 @@ namespace ejson
             while (literal[i] == next && next != 0)
             {
                 ++i;
-                if(!Read())
+                if (!Read())
                     return ReportError(EJSON_TEXT("expected: literal"));
             }
             if (literal[i] == 0)
@@ -861,7 +1035,7 @@ namespace ejson
             }
 
             bool valid = false;
-            while((cur >= L'0' && cur <= L'9') || cur == L'.')
+            while ((cur >= L'0' && cur <= L'9') || cur == L'.')
             {
                 // cannot start with '.'
                 if (!valid && cur == L'.')
@@ -874,7 +1048,7 @@ namespace ejson
                 Read();
             }
             // cannot end with '.'
-            if ( cur == L'.')
+            if (cur == L'.')
                 return ReportError(EJSON_TEXT("invalid number"));
 
             return valid;
@@ -907,13 +1081,13 @@ namespace ejson
                         next != L'n' &&
                         next != L'r' &&
                         next != L't' &&
-                        next != L'u' )
+                        next != L'u')
                         return ReportError(EJSON_TEXT("invalid escape car"));
 
                     if (next == L'u')
                     {
                         // must be followed by 4 numbers
-                        for(int i = 0; i < 4; ++i)
+                        for (int i = 0; i < 4; ++i)
                         {
                             Read();
                             StringAdd(value, cur);
@@ -932,7 +1106,7 @@ namespace ejson
         {
             if (!Read())
                 return ReportError(EJSON_TEXT("invalid token"));
-            if(!SkipSpaces())
+            if (!SkipSpaces())
                 return ReportError(EJSON_TEXT("invalid token"));
 
             token = Token::Invalid;
@@ -1083,7 +1257,7 @@ namespace ejson
             if (!ParseNextToken())
                 return false;
 
-            if ( token != Token::Colon)
+            if (token != Token::Colon)
                 return ReportError(EJSON_TEXT("unexpected object property, missing ':'"));
 
             if (!ParseNextToken())
@@ -1104,7 +1278,7 @@ namespace ejson
             if (!ParseNextToken())
                 return false;
 
-            while(true)
+            while (true)
             {
                 if (token == Token::SquaredClose)
                 {
@@ -1219,7 +1393,7 @@ namespace ejson
 
     private:
 
-        enum class StateType  : std::uint8_t
+        enum class StateType : std::uint8_t
         {
             Root,
             Value,
@@ -1260,7 +1434,7 @@ namespace ejson
         {
             State& state = GetState();
             EJSON_ASSERT(state.Type == StateType::Property || state.Type == StateType::Array || state.Type == StateType::Root, "internal error");
-            EJSON_ASSERT(state.Type != StateType::Root || state.Count == 0, "Json root may contain only one value") ;
+            EJSON_ASSERT(state.Type != StateType::Root || state.Count == 0, "Json root may contain only one value");
             State& root = state.Type == StateType::Property ? GetState(1) : GetState();
             if (state.Type != StateType::Property)
             {
@@ -1345,7 +1519,7 @@ namespace ejson
 
         StringReader(const StringReader&) = delete;
         StringReader& operator=(const StringReader&) = delete;
-        ~StringReader(){}
+        ~StringReader() {}
 
         bool Read(string_char& car)
         {
@@ -1385,7 +1559,7 @@ namespace ejson
         StringWriter(const StringWriter&) = delete;
         StringWriter& operator=(const StringWriter&) = delete;
 
-        ~StringWriter(){}
+        ~StringWriter() {}
 
 
         bool Write(string_char car)
@@ -1418,7 +1592,7 @@ namespace ejson
 
         StreamReader(const StreamReader&) = delete;
         StreamReader& operator=(const StreamReader&) = delete;
-        ~StreamReader(){}
+        ~StreamReader() {}
 
         bool Read(string_char& car)
         {
@@ -1446,7 +1620,7 @@ namespace ejson
         StreamWriter(const StringWriter&) = delete;
         StreamWriter& operator=(const StreamWriter&) = delete;
 
-        ~StreamWriter(){}
+        ~StreamWriter() {}
 
 
         bool Write(string_char car)
@@ -1545,7 +1719,7 @@ namespace ejson
 
         Value& GetContext()
         {
-            EJSON_ASSERT( VectorSize(contexts) > 0, "internal error");
+            EJSON_ASSERT(VectorSize(contexts) > 0, "internal error");
             return *contexts[VectorSize(contexts) - 1];
         }
 
@@ -1564,7 +1738,7 @@ namespace ejson
                 {
                     vector<Value>& array = context.AsArray();
                     VectorEmplace(array, EJSON_FORWARD<Value>(value));
-                    Value* addedValue = &array[VectorSize(array) -1];
+                    Value* addedValue = &array[VectorSize(array) - 1];
                     return addedValue;
                 }
                 else if (context.IsObject())
@@ -1739,3 +1913,7 @@ namespace ejson
         }
     }
 }
+
+#if EJSON_IMPL_FILE
+    #include "ejson_impl.h"
+#endif

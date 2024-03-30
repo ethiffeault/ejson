@@ -45,7 +45,23 @@ write prettify json to string:
         "name": "John"
     }
 ```
+create json in typed code
+```cpp
+        Value json;
+        json[L"FirstName"] = L"John";
+        json[L"LastName"] = L"Doe";
+        json[L"Age"] = 71;
+        json[L"Music"][0] = L"punk";
+        json[L"Music"][1] = L"country";
+        json[L"Music"][2] = L"folk";
 
+        string str;
+        Write(json, str);
+        std::wcout << str << std::endl << std::endl;
+```
+```
+{"FirstName":"John","LastName":"Doe","Age":71,"Music":["punk","country","folk"]}
+```
 ## File
 
 ### Read
@@ -89,7 +105,49 @@ john_doe_output.json:
         ]
     }
 ```
+## Json as cpp
+create json in typed code
+```cpp
+        Value json;
+        json[L"FirstName"] = L"John";
+        json[L"LastName"] = L"Doe";
+        json[L"Age"] = 71;
+        json[L"Music"][0] = L"punk";
+        json[L"Music"][1] = L"country";
+        json[L"Music"][2] = L"folk";
 
+        string str;
+        Write(json, str);
+        std::wcout << str << std::endl << std::endl;
+```
+```
+{"FirstName":"John","LastName":"Doe","Age":71,"Music":["punk","country","folk"]}
+```
+could be build composed:
+```cpp
+    Value json;
+    json[L"FirstName"] = L"John";
+    json[L"LastName"] = L"Doe";
+    json[L"Age"] = 71;
+    Value& music = json[L"Music"];
+    music[0] = L"punk";
+    music[1] = L"country";
+    music[2] = L"folk";
+```
+when loading data from file in read only, to make sure to not change input Value, use const Value& for your queries and make validation like this:
+```cpp
+    // read
+    std::wifstream input("..\\data\\john_doe.json");
+    ejson::Value fileValue;
+    ejson::Read(input, fileValue);
+
+    // 
+    ejson::Value& value = fileValue;
+    if (value[L"FirstName"].IsString())
+    {
+        string firstName = value[L"FirstName"].AsString();
+    }
+```
 ## Error
 
 read file with error:
