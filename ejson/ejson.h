@@ -574,12 +574,12 @@ namespace ejson
 
         // Null
 
-        Value(nullptr_t v)
+        Value(std::nullptr_t v)
         {
             SetNull();
         }
 
-        Value& operator=(nullptr_t v)
+        Value& operator=(std::nullptr_t v)
         {
             SetNull();
             return *this;
