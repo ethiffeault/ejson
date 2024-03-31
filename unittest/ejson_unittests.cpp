@@ -270,7 +270,7 @@ namespace test_parser
     }
 }
 
-namespace test_parser
+namespace test_code
 {
     using namespace ejson;
 
@@ -297,5 +297,88 @@ namespace test_parser
         Write(json, str);
         REQUIRE(str == EJSON_TEXT("{\"FirstName\":\"John\",\"LastName\":\"Doe\",\"Age\":71,\"Music\":[\"punk\",\"country\",\"folk\",0,null,true,false,1.2,1.2,[false],{\"p\":\"v\"}]}"));
     }
+}
+
+namespace test_error
+{
+    using namespace ejson;
+
+    TEST_CASE("test_error_01")
+    {
+        Value value;
+        ParserError error;
+        bool result = Read(EJSON_TEXT("\"\""), value,error);
+        REQUIRE(result == true);
+        REQUIRE(value.IsString() == true);
+        REQUIRE(error.Error == EJSON_TEXT(""));
+    }
+
+    TEST_CASE("test_error_02")
+    {
+        Value value;
+        ParserError error;
+        bool result = Read(EJSON_TEXT("\"\"\""), value,error);
+        REQUIRE(result == false);
+        REQUIRE(value.IsInvalid());
+        REQUIRE(error.Error == EJSON_TEXT("invalid input after value"));
+        REQUIRE(error.Line == 1);
+        REQUIRE(error.Column == 3);
+    }
+
+    TEST_CASE("test_error_03")
+    {
+#if EJSON_WCHAR
+        std::wifstream stream("..\\data\\john_doe_err.json");
+#else
+        std::ifstream stream("..\\data\\john_doe_err.json");
+#endif
+        if (stream)
+        {
+            Value value;
+            ParserError error;
+            bool result = Read(stream, value, error);
+            REQUIRE(result == false);
+            REQUIRE(value.IsInvalid());
+            REQUIRE(error.Line == 2);
+            REQUIRE(error.Column == 25);
+        }
+    }
+
+    TEST_CASE("test_error_04")
+    {
+        Value value;
+        ParserError error;
+        bool result = Read(EJSON_TEXT("12 12"), value,error);
+        REQUIRE(result == false);
+        REQUIRE(value.IsInvalid());
+        REQUIRE(error.Error == EJSON_TEXT("invalid input after value"));
+        REQUIRE(error.Line == 1);
+        REQUIRE(error.Column == 4);
+    }
+
+    TEST_CASE("test_error_05")
+    {
+        Value value;
+        ParserError error;
+        bool result = Read(EJSON_TEXT("{\"p\" : : 1}"), value,error);
+        REQUIRE(result == false);
+        REQUIRE(value.IsInvalid());
+        REQUIRE(error.Error == EJSON_TEXT("unexpected value"));
+        REQUIRE(error.Line == 1);
+        REQUIRE(error.Column == 8);
+    }
+
+    TEST_CASE("test_error_06")
+    {
+        Value value;
+        ParserError error;
+        bool result = Read(EJSON_TEXT("|"), value,error);
+        REQUIRE(result == false);
+        REQUIRE(value.IsInvalid());
+        REQUIRE(error.Error == EJSON_TEXT("invalid token"));
+        REQUIRE(error.Line == 1);
+        REQUIRE(error.Column == 1);
+    }
+
 }
 

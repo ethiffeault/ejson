@@ -47,7 +47,7 @@
 #define EJSON_FORWARD std::forward
 
 // char or wchar_t
-#define EJSON_WCHAR 0
+#define EJSON_WCHAR 1
 
 #if EJSON_WCHAR
     #define EJSON_TEXT(str) L##str
@@ -331,8 +331,8 @@ namespace ejson
 {
     struct ParserError
     {
-        int Line = 0;
-        int Column = 0;
+        u32 Line = 0;
+        u32 Column = 0;
         string File;
         string Error;
     };
@@ -920,7 +920,7 @@ namespace ejson
                 return false;
 
             if (cur != 0)
-                return ReportError(EJSON_TEXT("invalid input after value"));
+                return ReportError(EJSON_TEXT("invalid input after value"), line, column);
 
             return true;
         }
@@ -953,8 +953,10 @@ namespace ejson
         Token token = Token::Invalid;
         string value;
         ParserError error;
-        std::uint32_t line = 1;
-        std::uint32_t column = 0;
+        u32 line = 1;
+        u32 column = 0;
+        u32 tokenLine = 1;
+        u32 tokenColumn = 0;
 
         bool Read()
         {
@@ -999,10 +1001,10 @@ namespace ejson
             return true;
         }
 
-        bool ReportError(const string_view& msg)
+        bool ReportError(const string_view& msg, int l = -1, int c= -1)
         {
-            error.Line = line;
-            error.Column = column;
+            error.Line = l == -1 ? tokenLine : l;
+            error.Column = c == -1 ? tokenColumn : c;
             error.Error = msg;
             return false;
         }
@@ -1109,6 +1111,8 @@ namespace ejson
             if (!SkipSpaces())
                 return ReportError(EJSON_TEXT("invalid token"));
 
+            tokenLine = line;
+            tokenColumn = column;
             token = Token::Invalid;
             switch (cur)
             {
@@ -1234,14 +1238,24 @@ namespace ejson
                 switch (token)
                 {
                     case Token::String:
+                    {
                         if (!ParseProperty())
                             return false;
+
+                        if (!ParseNextToken())
+                            return false;
+                        switch (token)
+                        {
+                            case Token::Comma:
+                                break;
+                            case Token::CurlyClose:
+                                listener->ObjectEnd();
+                                return true;
+                            default:
+                                return ReportError(EJSON_TEXT("unexpected token after object property"));
+                        }
                         break;
-                    case Token::Comma:
-                        break;
-                    case Token::CurlyClose:
-                        listener->ObjectEnd();
-                        return true;
+                    }
                     default:
                         return ReportError(EJSON_TEXT("unexpected object property"));
                 }
@@ -1851,6 +1865,7 @@ namespace ejson
         }
         else
         {
+            value.SetInvalid();
             error = jsonReader.GetError();
             return false;
         }
@@ -1873,6 +1888,7 @@ namespace ejson
         }
         else
         {
+            value.SetInvalid();
             error = jsonReader.GetError();
             return false;
         }
