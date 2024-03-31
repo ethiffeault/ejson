@@ -2,12 +2,9 @@
 
 json library in c++
 
-Single header c++ [ejson.h](ejson/ejson.h) json library that separate parsing from processing, making it very easy to customize and implement json serialization for any rtti library. Parsing and processing are stream friendly to minimize memory footprint for large json file. Support both char and wide char.
+Single header only c++. Parsing is stream friendly to minimize memory footprint for large json file. Support both char and wide char. Provide a "Value" type to handle underlying json type (null, bool, number, string, array and object) making it very easy manipulation in code.
 
-ejson provide a "Value" type to handle underlying json type (null, bool, number, string, array and object)
-
-implementation
-* std (default)
+Parsing separate in 2 layers, making it very easy to customize and implement json serialization for any rtti library:
 * [eti](implementation/eti) (wip)
 * [unreal](implementation/unreal) (wip)
 
