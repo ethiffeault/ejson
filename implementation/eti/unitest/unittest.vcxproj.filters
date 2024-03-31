@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\ejson\ejson.h">
+      <Filter>ejson</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ejson\ejson_impl.h">
+      <Filter>ejson</Filter>
+    </ClInclude>
+    <ClInclude Include="..\eti\eti.h">
+      <Filter>eti</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="unittest.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="ejson">
+      <UniqueIdentifier>{26c3f8d8-aa29-4bff-acd5-190ecb7e46ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="eti">
+      <UniqueIdentifier>{935db889-7330-43eb-acc4-01538ab91cb4}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

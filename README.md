@@ -8,6 +8,7 @@ ejson provide a "Value" type to handle underlying json type (null, bool, number,
 
 implementation
 * std (default)
+* [eti](implementation/eti) (wip)
 * [unreal](implementation/unreal) (wip)
 
 read json from string:
@@ -201,10 +202,6 @@ modify configuration at the beginning of ejson.h
     #define EJSON_MAP_ORDERED 1 // (default, keep load/write ordered)
     #define EJSON_MAP_ORDERED 0 // (faster, don't keep ordered, ex: suitable for final build that only read)
 ```
-## Implementation
-
-* std (default)
-* [unreal](implementation/unreal) (wip)
 
 ## Others
 

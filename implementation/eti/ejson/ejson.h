@@ -28,7 +28,7 @@
 // Configurations
 
 #define EJSON_CONFIG_FILE 0
-#define EJSON_IMPL_FILE 0
+#define EJSON_IMPL_FILE 1
 
 #if EJSON_CONFIG_FILE
 #include "ejson_config.h"
