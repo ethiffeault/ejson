@@ -107,27 +107,27 @@ namespace ejson
 #endif
 
     template <typename T>
-    size_t StringSize(const T& str)
+    size_t StringSize(const T& str) noexcept
     {
         return str.size();
     }
 
-    inline void StringClear(string& str)
+    inline void StringClear(string& str) noexcept
     {
         str.clear();
     }
 
-    inline void StringAdd(string& str, string_char car)
+    inline void StringAdd(string& str, string_char car) noexcept
     {
         str.push_back(car);
     }
 
-    inline void StringAdd(string& str, const string& other)
+    inline void StringAdd(string& str, const string& other) noexcept
     {
         str.append(other);
     }
 
-    inline void WriteNumber(number value, string& output)
+    inline void WriteNumber(number value, string& output) noexcept
     {
         // todo: make our own function with no allocation
 #if EJSON_WCHAR
@@ -143,13 +143,13 @@ namespace ejson
 
     // stream
 
-    inline bool StreamWrite(output_stream& stream, string_char car)
+    inline bool StreamWrite(output_stream& stream, string_char car) noexcept
     {
         stream << car;
         return true;
     }
 
-    inline size_t StreamWrite(output_stream& stream, const string_view& str)
+    inline size_t StreamWrite(output_stream& stream, const string_view& str) noexcept
     {
         stream << str;
         return StringSize(str);
@@ -161,18 +161,18 @@ namespace ejson
     using vector = std::vector<VALUE>;
 
     template<typename VALUE>
-    size_t VectorSize(const vector<VALUE>& vector)
+    size_t VectorSize(const vector<VALUE>& vector) noexcept
     {
         return vector.size();
     }
 
     template<typename VALUE>
-    void VectorRemoveLast(vector<VALUE>& vector)
+    void VectorRemoveLast(vector<VALUE>& vector) noexcept
     {
         vector.pop_back();
     }
     template<typename VALUE>
-    void VectorEmplace(vector<VALUE>& vector, VALUE&& value)
+    void VectorEmplace(vector<VALUE>& vector, VALUE&& value) noexcept
     {
         vector.emplace_back(EJSON_FORWARD<VALUE>(value));
     }
@@ -199,30 +199,30 @@ namespace ejson
 
             Iterator(const OrderedMap* dict, KeyIterator it) : dict(dict), it(EJSON_MOVE(it)) {}
 
-            Iterator& operator++()
+            Iterator& operator++() noexcept
             {
                 ++it;
                 return *this;
             }
 
-            bool operator!=(const Iterator& other) const
+            bool operator!=(const Iterator& other) const noexcept
             {
                 return it != other.it;
             }
 
-            KeyValuePair operator*() const
+            KeyValuePair operator*() const noexcept
             {
                 const KEY& key = *it;
                 return KeyValuePair(key, dict->map.at(key));
             }
         };
 
-        Iterator begin() const { return Iterator(this, keys.begin()); }
-        Iterator end() const { return Iterator(this, keys.end()); }
+        Iterator begin() const noexcept { return Iterator(this, keys.begin()); }
+        Iterator end() const noexcept { return Iterator(this, keys.end()); }
 
-        size_t size() const { return map.size(); }
+        size_t size() const noexcept { return map.size(); }
 
-        VALUE& operator[](const KEY& key)
+        VALUE& operator[](const KEY& key) noexcept
         {
             VALUE* existing = Find(key);
             if (existing)
@@ -230,12 +230,12 @@ namespace ejson
             return *TryEmplace(key, {});
         }
 
-        const VALUE& operator[](const KEY& key) const
+        const VALUE& operator[](const KEY& key) const noexcept
         {
             return map[key];
         }
 
-        auto emplace(const KEY& key, VALUE&& value)
+        auto emplace(const KEY& key, VALUE&& value) noexcept
         {
             auto result = map.emplace(key, EJSON_FORWARD<VALUE>(value));
             if (result.second)
@@ -244,7 +244,7 @@ namespace ejson
         }
 
         // try add a new value and return it pointer, else return pointer of existing value
-        VALUE* TryEmplace(const KEY& key, const VALUE&& value)
+        VALUE* TryEmplace(const KEY& key, const VALUE&& value) noexcept
         {
             auto result = map.try_emplace(key, EJSON_MOVE(value));
             if (result.second)
@@ -253,7 +253,7 @@ namespace ejson
         }
 
         // find an entry, return it's value ptr if exist, else nullptr
-        VALUE* Find(const KEY& key)
+        VALUE* Find(const KEY& key) noexcept
         {
             auto it = map.find(key);
             if (it != map.end())
@@ -262,7 +262,7 @@ namespace ejson
                 return nullptr;
         }
 
-        const VALUE* Find(const KEY& key) const
+        const VALUE* Find(const KEY& key) const noexcept
         {
             auto it = map.find(key);
             if (it != map.end())
@@ -281,19 +281,19 @@ namespace ejson
     using map = OrderedMap<KEY, VALUE>;
 
     template<typename KEY, typename VALUE>
-    VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key)
+    VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key) noexcept
     {
         return m.Find(key);
     }
 
     template<typename KEY, typename VALUE>
-    const VALUE* MapFind(const map<KEY, VALUE>& m, const KEY& key)
+    const VALUE* MapFind(const map<KEY, VALUE>& m, const KEY& key) noexcept
     {
         return m.Find(key);
     }
 
     template<typename KEY, typename VALUE>
-    VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value)
+    VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value) noexcept
     {
         return m.TryEmplace(key, EJSON_FORWARD<VALUE>(value));
     }
@@ -304,7 +304,7 @@ namespace ejson
     using map = std::map<KEY, VALUE>;
 
     template<typename KEY, typename VALUE>
-    VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key)
+    VALUE* MapFind(map<KEY, VALUE>& m, const KEY& key) noexcept
     {
         auto result = m.find(key);
         if (result != m.end())
@@ -314,7 +314,7 @@ namespace ejson
     }
 
     template<typename KEY, typename VALUE>
-    VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value)
+    VALUE* MapTryEmplace(map<KEY, VALUE>& m, const KEY& key, VALUE&& value) noexcept
     {
         auto [it, success] = m.try_emplace(key, EJSON_FORWARD<VALUE>(value));
         return &(it->second);
@@ -337,12 +337,12 @@ namespace ejson
         string Error;
     };
 
-    inline bool IsDigit(string_char c)
+    inline bool IsDigit(string_char c) noexcept
     {
         return c >= EJSON_TEXT('0') && c <= EJSON_TEXT('9');
     }
 
-    inline bool ParseNumber(string_view str, number& result)
+    inline bool ParseNumber(string_view str, number& result) noexcept
     {
         size_t strSize = StringSize(str);
         number sign = 1.0;
@@ -446,22 +446,22 @@ namespace ejson
 
         Value() = default;
 
-        Value(const Value& value)
+        Value(const Value& value) noexcept
         {
             Set(value);
         }
 
-        Value(Value&& value)
+        Value(Value&& value) noexcept
         {
             Set(EJSON_FORWARD<Value>(value));
         }
 
-        ~Value()
+        ~Value() noexcept
         {
             SetInvalid();
         }
 
-        Value& operator=(const Value& other)
+        Value& operator=(const Value& other) noexcept
         {
             if (this != &other)
             {
@@ -470,13 +470,13 @@ namespace ejson
             return *this;
         }
 
-        Type GetType() const
+        Type GetType() const noexcept
         {
             return type;
         }
 
         // Value
-        void Set(const Value& other)
+        void Set(const Value& other) noexcept
         {
             switch (other.type)
             {
@@ -504,7 +504,7 @@ namespace ejson
             }
         }
 
-        void Set(Value&& other)
+        void Set(Value&& other) noexcept
         {
             switch (other.type)
             {
@@ -535,17 +535,17 @@ namespace ejson
 
         // Invalid
 
-        bool IsInvalid() const
+        bool IsInvalid() const noexcept
         {
             return type == Type::Invalid;
         }
 
-        bool IsValid() const
+        bool IsValid() const noexcept
         {
             return !IsInvalid();
         }
 
-        void SetInvalid()
+        void SetInvalid() noexcept
         {
             switch (type)
             {
@@ -574,23 +574,23 @@ namespace ejson
 
         // Null
 
-        Value(std::nullptr_t v)
+        Value(std::nullptr_t v) noexcept
         {
             SetNull();
         }
 
-        Value& operator=(std::nullptr_t v)
+        Value& operator=(std::nullptr_t v) noexcept
         {
             SetNull();
             return *this;
         }
 
-        bool IsNull() const
+        bool IsNull() const noexcept
         {
             return type == Type::Null;
         }
 
-        void SetNull()
+        void SetNull() noexcept
         {
             SetInvalid();
             type = Type::Null;
@@ -598,71 +598,71 @@ namespace ejson
 
         // Bool
 
-        Value(bool v)
+        Value(bool v) noexcept
         {
             SetBool(v);
         }
 
-        Value& operator=(const bool& v)
+        Value& operator=(const bool& v) noexcept
         {
             SetBool(v);
             return *this;
         }
 
-        bool IsBool() const
+        bool IsBool() const noexcept
         {
             return type == Type::Bool;
         }
 
-        void SetBool(bool value)
+        void SetBool(bool value) noexcept
         {
             SetInvalid();
             type = Type::Bool;
             AsBool() = value;
         }
 
-        bool& AsBool()
+        bool& AsBool() noexcept
         {
             EJSON_ASSERT(type == Type::Bool, "expected type: bool");
             return *(bool*)buffer;
         }
 
-        const bool& AsBool() const
+        const bool& AsBool() const noexcept
         {
             return const_cast<Value*>(this)->AsBool();
         }
 
         // Number
 
-        Value(s8 v) { SetNumber(v); }
-        Value& operator=(s8 v) { SetNumber(v); return *this; }
-        Value(s16 v) { SetNumber(v); }
-        Value& operator=(s16 v) { SetNumber(v); return *this; }
-        Value(s32 v) { SetNumber(v); }
-        Value& operator=(s32 v) { SetNumber(v); return *this; }
-        Value(s64 v) { SetNumber((number)v); }
-        Value& operator=(s64 v) { SetNumber((number)v); return *this; }
+        Value(s8 v) noexcept { SetNumber(v); }
+        Value& operator=(s8 v) noexcept { SetNumber(v); return *this; }
+        Value(s16 v) noexcept { SetNumber(v); }
+        Value& operator=(s16 v) noexcept { SetNumber(v); return *this; }
+        Value(s32 v) noexcept { SetNumber(v); }
+        Value& operator=(s32 v) noexcept { SetNumber(v); return *this; }
+        Value(s64 v) noexcept { SetNumber((number)v); }
+        Value& operator=(s64 v) noexcept { SetNumber((number)v); return *this; }
 
-        Value(u8 v) { SetNumber(v); }
-        Value& operator=(u8 v) { SetNumber(v); return *this; }
-        Value(u16 v) { SetNumber(v); }
-        Value& operator=(u16 v) { SetNumber(v); return *this; }
-        Value(u32 v) { SetNumber(v); }
-        Value& operator=(u32 v) { SetNumber(v); return *this; }
-        Value(u64 v) { SetNumber((number)v); }
-        Value& operator=(u64 v) { SetNumber((number)v); return *this; }
+        Value(u8 v) noexcept { SetNumber(v); }
+        Value& operator=(u8 v) noexcept { SetNumber(v); return *this; }
+        Value(u16 v) noexcept { SetNumber(v); }
+        Value& operator=(u16 v) noexcept { SetNumber(v); return *this; }
+        Value(u32 v) noexcept { SetNumber(v); }
+        Value& operator=(u32 v) noexcept { SetNumber(v); return *this; }
+        Value(u64 v) noexcept { SetNumber((number)v); }
+        Value& operator=(u64 v) noexcept { SetNumber((number)v); return *this; }
 
-        Value(f32 v) { SetNumber(v); }
-        Value& operator=(f32 v) { SetNumber(v); return *this; }
-        Value(f64 v) { SetNumber((number)v); }
-        Value& operator=(f64 v) { SetNumber((number)v); return *this; }
+        Value(f32 v) noexcept { SetNumber(v); }
+        Value& operator=(f32 v) noexcept { SetNumber(v); return *this; }
+        Value(f64 v) noexcept { SetNumber((number)v); }
+        Value& operator=(f64 v) noexcept { SetNumber((number)v); return *this; }
 
-        bool IsNumber() const
+        bool IsNumber() const noexcept
         {
             return type == Type::Number;
         }
 
-        void SetNumber(number value)
+        void SetNumber(number value) noexcept
         {
             SetInvalid();
             type = Type::Number;
@@ -671,54 +671,54 @@ namespace ejson
             AsNumber() = value;
         }
 
-        number& AsNumber()
+        number& AsNumber() noexcept
         {
             EJSON_ASSERT(type == Type::Number, "expected type: number");
             return *(number*)buffer;
         }
 
-        const number& AsNumber() const
+        const number& AsNumber() const noexcept
         {
             return const_cast<Value*>(this)->AsNumber();
         }
 
         // String
 
-        Value(const string& str)
+        Value(const string& str) noexcept
         {
             SetString(str);
         }
 
-        Value(const string_char* str)
+        Value(const string_char* str) noexcept
         {
             SetString(str);
         }
 
-        Value& operator=(const string& str)
+        Value& operator=(const string& str) noexcept
         {
             SetString(str);
             return *this;
         }
 
-        Value& operator=(const string_char* str)
+        Value& operator=(const string_char* str) noexcept
         {
             SetString(string(str));
             return *this;
         }
 
-        bool IsString() const
+        bool IsString() const noexcept
         {
             return type == Type::String;
         }
 
-        void SetString(const string& value)
+        void SetString(const string& value) noexcept
         {
             SetInvalid();
             type = Type::String;
             new (buffer) string(value);
         }
 
-        void SetString(string&& value)
+        void SetString(string&& value) noexcept
         {
             SetInvalid();
             type = Type::String;
@@ -727,43 +727,43 @@ namespace ejson
             new (buffer) string(EJSON_FORWARD<string>(value));
         }
 
-        string& AsString()
+        string& AsString() noexcept
         {
             EJSON_ASSERT(type == Type::String, "expected type: string");
             return *(string*)buffer;
         }
 
-        const string& AsString() const
+        const string& AsString() const noexcept
         {
             return const_cast<Value*>(this)->AsString();
         }
 
         // Array
 
-        Value(const vector<Value>& value)
+        Value(const vector<Value>& value) noexcept
         {
             SetArray(value);
         }
 
-        Value& operator=(const vector<Value>& value)
+        Value& operator=(const vector<Value>& value) noexcept
         {
             SetArray(value);
             return *this;
         }
 
-        bool IsArray() const
+        bool IsArray() const noexcept
         {
             return type == Type::Array;
         }
 
-        void SetArray(const vector<Value>& value)
+        void SetArray(const vector<Value>& value) noexcept
         {
             SetInvalid();
             type = Type::Array;
             new (buffer) vector<Value>(value);
         }
 
-        void SetArray(vector<Value>&& value)
+        void SetArray(vector<Value>&& value) noexcept
         {
             SetInvalid();
             type = Type::Array;
@@ -772,18 +772,18 @@ namespace ejson
             new (buffer) vector<Value>(EJSON_FORWARD<vector<Value>>(value));
         }
 
-        vector<Value>& AsArray()
+        vector<Value>& AsArray() noexcept
         {
             EJSON_ASSERT(type == Type::Array, "expected type: array");
             return *(vector<Value>*)buffer;
         }
 
-        const vector<Value>& AsArray() const
+        const vector<Value>& AsArray() const noexcept
         {
             return const_cast<Value*>(this)->AsArray();
         }
 
-        Value& operator[](size_t index)
+        Value& operator[](size_t index) noexcept
         {
             static Value invalid;
             if (!IsArray())
@@ -797,23 +797,23 @@ namespace ejson
 
         // Object
 
-        Value(const map<string, Value>& value)
+        Value(const map<string, Value>& value) noexcept
         {
             SetObject(value);
         }
 
-        Value& operator=(const map<string, Value>& value)
+        Value& operator=(const map<string, Value>& value) noexcept
         {
             SetObject(value);
             return *this;
         }
 
-        bool IsObject() const
+        bool IsObject() const noexcept
         {
             return type == Type::Object;
         }
 
-        void SetObject(const map<string, Value>& value)
+        void SetObject(const map<string, Value>& value) noexcept
         {
             SetInvalid();
             type = Type::Object;
@@ -822,7 +822,7 @@ namespace ejson
             new (buffer) map<string, Value>(value);
         }
 
-        void SetObject(map<string, Value>&& value)
+        void SetObject(map<string, Value>&& value) noexcept
         {
             SetInvalid();
             type = Type::Object;
@@ -831,18 +831,18 @@ namespace ejson
             new (buffer) map<string, Value>(EJSON_FORWARD<map<string, Value>>(value));
         }
 
-        map<string, Value>& AsObject()
+        map<string, Value>& AsObject() noexcept
         {
             EJSON_ASSERT(type == Type::Object, "expected type: object");
             return *(map<string, Value>*)buffer;
         }
 
-        const map<string, Value>& AsObject() const
+        const map<string, Value>& AsObject() const noexcept
         {
             return const_cast<Value*>(this)->AsObject();
         }
 
-        const Value& operator[](size_t index) const
+        const Value& operator[](size_t index) const noexcept
         {
             static Value invalid;
             if (IsArray() && index < VectorSize(AsArray()))
@@ -855,7 +855,7 @@ namespace ejson
             }
         }
 
-        Value& operator[](const string& str)
+        Value& operator[](const string& str) noexcept
         {
             static Value invalid;
             if (!IsObject())
@@ -865,7 +865,7 @@ namespace ejson
             return *MapTryEmplace(AsObject(), str, {});
         }
 
-        const Value& operator[](string_view str) const
+        const Value& operator[](string_view str) const noexcept
         {
             static Value invalid;
             if (IsObject())
@@ -898,11 +898,11 @@ namespace ejson
     {
     public:
 
-        JsonReader(LISTENER& listener, STRING_READER& reader)
+        JsonReader(LISTENER& listener, STRING_READER& reader) noexcept
             :listener(&listener), reader(&reader)
         {}
 
-        bool Parse()
+        bool Parse() noexcept
         {
             if (!reader->Read(next))
                 next = 0;
@@ -925,8 +925,8 @@ namespace ejson
             return true;
         }
 
-        ParserError GetError() const { return error; }
-        bool HaveError() const { return StringSize(error.Error) != 0; }
+        ParserError GetError() const noexcept { return error; }
+        bool HaveError() const noexcept { return StringSize(error.Error) != 0; }
 
     private:
 
@@ -958,7 +958,7 @@ namespace ejson
         u32 tokenLine = 1;
         u32 tokenColumn = 0;
 
-        bool Read()
+        bool Read() noexcept
         {
             cur = next;
 
@@ -991,7 +991,7 @@ namespace ejson
             return true;
         }
 
-        bool SkipSpaces()
+        bool SkipSpaces() noexcept
         {
             while (cur == L' ' || cur == L'\t' || cur == L'\n')
             {
@@ -1001,7 +1001,7 @@ namespace ejson
             return true;
         }
 
-        bool ReportError(const string_view& msg, int l = -1, int c= -1)
+        bool ReportError(const string_view& msg, int l = -1, int c= -1) noexcept
         {
             error.Line = l == -1 ? tokenLine : l;
             error.Column = c == -1 ? tokenColumn : c;
@@ -1009,7 +1009,7 @@ namespace ejson
             return false;
         }
 
-        bool ParseLiteral(const string_char* literal)
+        bool ParseLiteral(const string_char* literal) noexcept
         {
             EJSON_ASSERT(literal[0] == cur, "internal error");
             size_t i = 1;
@@ -1025,7 +1025,7 @@ namespace ejson
                 return ReportError(EJSON_TEXT("expected: literal"));
         }
 
-        bool ParseNumber()
+        bool ParseNumber() noexcept
         {
             StringClear(value);
 
@@ -1056,7 +1056,7 @@ namespace ejson
             return valid;
         }
 
-        bool ParseString()
+        bool ParseString() noexcept
         {
             EJSON_ASSERT(cur == EJSON_TEXT('"'), "internal error");
 
@@ -1104,7 +1104,7 @@ namespace ejson
             }
         }
 
-        bool ParseNextToken()
+        bool ParseNextToken() noexcept
         {
             if (!Read())
                 return ReportError(EJSON_TEXT("invalid token"));
@@ -1196,7 +1196,7 @@ namespace ejson
             }
         }
 
-        bool ParseValue()
+        bool ParseValue() noexcept
         {
             switch (token)
             {
@@ -1224,7 +1224,7 @@ namespace ejson
             }
         }
 
-        bool ParseObject()
+        bool ParseObject() noexcept
         {
             EJSON_ASSERT(token == Token::CurlyOpen, "internal error");
 
@@ -1262,7 +1262,7 @@ namespace ejson
             }
         }
 
-        bool ParseProperty()
+        bool ParseProperty() noexcept
         {
             EJSON_ASSERT(token == Token::String, "internal error");
 
@@ -1283,7 +1283,7 @@ namespace ejson
             return true;
         }
 
-        bool ParseArray()
+        bool ParseArray() noexcept
         {
             EJSON_ASSERT(token == Token::SquaredOpen, "internal error");
 
@@ -1321,27 +1321,27 @@ namespace ejson
     {
     public:
 
-        JsonWriter(STRING_WRITER& writer)
+        JsonWriter(STRING_WRITER& writer) noexcept
             : writer(&writer)
         {
             PushState(StateType::Root);
         }
 
-        void WriteNull()
+        void WriteNull() noexcept
         {
             WriteValueBegin();
             writer->Write(EJSON_TEXT("null"));
             WriteValueEnd();
         }
 
-        void WriteBool(bool value)
+        void WriteBool(bool value) noexcept
         {
             WriteValueBegin();
             writer->Write(value ? EJSON_TEXT("true") : EJSON_TEXT("false"));
             WriteValueEnd();
         }
 
-        void WriteNumber(number value)
+        void WriteNumber(number value) noexcept
         {
             WriteValueBegin();
             StringClear(tmpString); // not needed ?
@@ -1350,7 +1350,7 @@ namespace ejson
             WriteValueEnd();
         }
 
-        void WriteString(const string_view& value)
+        void WriteString(const string_view& value) noexcept
         {
             WriteValueBegin();
             writer->Write(EJSON_TEXT("\""));
@@ -1359,7 +1359,7 @@ namespace ejson
             WriteValueEnd();
         }
 
-        void WriteObjectBegin()
+        void WriteObjectBegin() noexcept
         {
             WriteValueBegin();
             WriteContainerBegin();
@@ -1367,7 +1367,7 @@ namespace ejson
             writer->Write(EJSON_TEXT("{"));
         }
 
-        void WriteObjectEnd()
+        void WriteObjectEnd() noexcept
         {
             EJSON_ASSERT(GetState().Type == StateType::Object, "internal error");
             WriteContainerEnd();
@@ -1375,7 +1375,7 @@ namespace ejson
             WriteValueEnd();
         }
 
-        void WriteProperty(const string_view& name)
+        void WriteProperty(const string_view& name) noexcept
         {
             State& root = GetState();
             EJSON_ASSERT(root.Type == StateType::Object, "internal error");
@@ -1389,7 +1389,7 @@ namespace ejson
                 writer->Write(EJSON_TEXT(" "));
         }
 
-        void WriteArrayBegin()
+        void WriteArrayBegin() noexcept
         {
             WriteValueBegin();
             WriteContainerBegin();
@@ -1397,7 +1397,7 @@ namespace ejson
             writer->Write(EJSON_TEXT("["));
         }
 
-        void WriteArrayEnd()
+        void WriteArrayEnd() noexcept
         {
             EJSON_ASSERT(GetState().Type == StateType::Array, "internal error");
             WriteContainerEnd();
@@ -1423,14 +1423,14 @@ namespace ejson
             StateType Type = StateType::Root;
         };
 
-        void WriteIndentation()
+        void WriteIndentation() noexcept
         {
             static_assert(PRETTIFY);
             for (int i = 0; i < indentation; ++i)
                 writer->Write(tab);
         }
 
-        void WriteValuePrefix()
+        void WriteValuePrefix() noexcept
         {
             if (GetState().Count != 0)
                 writer->Write(EJSON_TEXT(","));
@@ -1444,7 +1444,7 @@ namespace ejson
             }
         }
 
-        void WriteValueBegin()
+        void WriteValueBegin() noexcept
         {
             State& state = GetState();
             EJSON_ASSERT(state.Type == StateType::Property || state.Type == StateType::Array || state.Type == StateType::Root, "internal error");
@@ -1458,7 +1458,7 @@ namespace ejson
             PushState(StateType::Value);
         }
 
-        void WriteValueEnd()
+        void WriteValueEnd() noexcept
         {
             EJSON_ASSERT(GetState().Type == StateType::Value, "internal error");
             PopState();
@@ -1466,13 +1466,13 @@ namespace ejson
                 PopState();
         }
 
-        void WriteContainerBegin()
+        void WriteContainerBegin() noexcept
         {
             if constexpr (PRETTIFY)
                 ++indentation;
         }
 
-        void WriteContainerEnd()
+        void WriteContainerEnd() noexcept
         {
             if constexpr (PRETTIFY)
             {
@@ -1490,18 +1490,18 @@ namespace ejson
             }
         }
 
-        void PushState(StateType type)
+        void PushState(StateType type) noexcept
         {
             VectorEmplace(states, State{ 0,0,type });
         }
 
-        void PopState()
+        void PopState() noexcept
         {
             EJSON_ASSERT(VectorSize(states) > 0, "internal error");
             VectorRemoveLast(states);
         }
 
-        State& GetState(size_t depth = 0)
+        State& GetState(size_t depth = 0) noexcept
         {
             EJSON_ASSERT(VectorSize(states) > 0, "internal error");
             return states[VectorSize(states) - (1 + depth)];
@@ -1518,7 +1518,7 @@ namespace ejson
     {
     public:
 
-        StringReader(string_view str, bool owner = false)
+        StringReader(string_view str, bool owner = false) noexcept
         {
             if (owner)
             {
@@ -1535,7 +1535,7 @@ namespace ejson
         StringReader& operator=(const StringReader&) = delete;
         ~StringReader() {}
 
-        bool Read(string_char& car)
+        bool Read(string_char& car) noexcept
         {
             if (position < StringSize(stringView))
             {
@@ -1561,34 +1561,34 @@ namespace ejson
 
     public:
 
-        StringWriter()
+        StringWriter() noexcept
         {
             string = &stringData;
         }
 
-        StringWriter(string& str)
+        StringWriter(string& str) noexcept
             : string(&str)
         {}
 
         StringWriter(const StringWriter&) = delete;
         StringWriter& operator=(const StringWriter&) = delete;
 
-        ~StringWriter() {}
+        ~StringWriter() noexcept {}
 
 
-        bool Write(string_char car)
+        bool Write(string_char car) noexcept
         {
             StringAdd(*string, car);
             return true;
         }
 
-        size_t Write(const string_view& str)
+        size_t Write(const string_view& str) noexcept
         {
             StringAdd(*string, ::ejson::string(str));
             return StringSize(str);
         }
 
-        string ToString() const { return *string; }
+        string ToString() const noexcept { return *string; }
 
     private:
 
@@ -1600,15 +1600,15 @@ namespace ejson
     {
     public:
 
-        StreamReader(input_stream& stream)
+        StreamReader(input_stream& stream) noexcept
             : stream(stream)
         {}
 
         StreamReader(const StreamReader&) = delete;
         StreamReader& operator=(const StreamReader&) = delete;
-        ~StreamReader() {}
+        ~StreamReader() noexcept {}
 
-        bool Read(string_char& car)
+        bool Read(string_char& car) noexcept
         {
             if (stream.get(car))
                 return true;
@@ -1627,22 +1627,22 @@ namespace ejson
 
     public:
 
-        StreamWriter(output_stream& stream)
+        StreamWriter(output_stream& stream) noexcept
             : stream(stream)
         {}
 
         StreamWriter(const StringWriter&) = delete;
         StreamWriter& operator=(const StreamWriter&) = delete;
 
-        ~StreamWriter() {}
+        ~StreamWriter() noexcept {}
 
 
-        bool Write(string_char car)
+        bool Write(string_char car) noexcept
         {
             return StreamWrite(stream, car);
         }
 
-        size_t Write(const string_view& str)
+        size_t Write(const string_view& str) noexcept
         {
             return StreamWrite(stream, str);
         }
@@ -1654,11 +1654,11 @@ namespace ejson
 
     struct ValueReader
     {
-        ValueReader(Value& json)
+        ValueReader(Value& json) noexcept
             : root(json)
         {}
 
-        void ObjectBegin()
+        void ObjectBegin() noexcept
         {
             Value value;
             value.SetObject(map<string, Value>());
@@ -1666,22 +1666,22 @@ namespace ejson
             VectorEmplace(contexts, EJSON_MOVE(objectValue));
         }
 
-        void ObjectEnd()
+        void ObjectEnd() noexcept
         {
             EJSON_ASSERT(GetContext().IsObject(), "object type expected");
             VectorRemoveLast(contexts);
         }
 
-        void PropertyBegin(const string_view& key)
+        void PropertyBegin(const string_view& key) noexcept
         {
             propertyName = key;
         }
 
-        void PropertyEnd()
+        void PropertyEnd() noexcept
         {
         }
 
-        void ArrayBegin()
+        void ArrayBegin() noexcept
         {
             Value value;
             value.SetArray(vector<Value>());
@@ -1689,34 +1689,34 @@ namespace ejson
             VectorEmplace(contexts, EJSON_MOVE(arrayValue));
         }
 
-        void ArrayEnd()
+        void ArrayEnd() noexcept
         {
             EJSON_ASSERT(GetContext().IsArray(), "array type expected");
             VectorRemoveLast(contexts);
         }
 
-        void ValueBool(bool b)
+        void ValueBool(bool b) noexcept
         {
             Value value;
             value.SetBool(b);
             SetValue(EJSON_MOVE(value));
         }
 
-        void ValueNull()
+        void ValueNull() noexcept
         {
             Value value;
             value.SetNull();
             SetValue(EJSON_MOVE(value));
         }
 
-        void ValueString(const string_view& str)
+        void ValueString(const string_view& str) noexcept
         {
             Value value;
             value.SetString(string(str));
             SetValue(EJSON_MOVE(value));
         }
 
-        void ValueNumber(const string_view& str)
+        void ValueNumber(const string_view& str) noexcept
         {
             number number = 0;
             ParseNumber(str, number);
@@ -1731,13 +1731,13 @@ namespace ejson
         vector<Value*> contexts;
         string propertyName;
 
-        Value& GetContext()
+        Value& GetContext() noexcept
         {
             EJSON_ASSERT(VectorSize(contexts) > 0, "internal error");
             return *contexts[VectorSize(contexts) - 1];
         }
 
-        Value* SetValue(Value&& value)
+        Value* SetValue(Value&& value) noexcept
         {
             if (VectorSize(contexts) == 0)
             {
@@ -1776,11 +1776,11 @@ namespace ejson
 
     public:
 
-        ValueWriter(JSON_WRITER& jsonWriter)
+        ValueWriter(JSON_WRITER& jsonWriter) noexcept
             :jsonWriter(jsonWriter)
         {}
 
-        void Write(const Value& value)
+        void Write(const Value& value) noexcept
         {
             switch (value.GetType())
             {
@@ -1841,20 +1841,20 @@ namespace ejson
 
     // Json
 
-    bool Read(string_view json, Value& value);
-    bool Read(string_view json, Value& value, ParserError& error);
-    bool Read(input_stream& stream, Value& value);
-    bool Read(input_stream& stream, Value& value, ParserError& error);
-    void Write(const Value& value, string& str, bool prettify = false);
-    void Write(const Value& value, output_stream& stream, bool prettify = false);
+    bool Read(string_view json, Value& value) noexcept;
+    bool Read(string_view json, Value& value, ParserError& error) noexcept;
+    bool Read(input_stream& stream, Value& value) noexcept;
+    bool Read(input_stream& stream, Value& value, ParserError& error) noexcept;
+    void Write(const Value& value, string& str, bool prettify = false) noexcept;
+    void Write(const Value& value, output_stream& stream, bool prettify = false) noexcept;
 
-    inline bool Read(string_view json, Value& value)
+    inline bool Read(string_view json, Value& value) noexcept
     {
         ParserError error;
         return Read(json, value, error);
     }
 
-    inline bool Read(string_view json, Value& value, ParserError& error)
+    inline bool Read(string_view json, Value& value, ParserError& error) noexcept
     {
         StringReader stringReader(json);
         ValueReader valueReader(value);
@@ -1871,13 +1871,13 @@ namespace ejson
         }
     }
 
-    inline bool Read(input_stream& stream, Value& value)
+    inline bool Read(input_stream& stream, Value& value) noexcept
     {
         ParserError error;
         return Read(stream, value, error);
     }
 
-    inline bool Read(input_stream& stream, Value& value, ParserError& error)
+    inline bool Read(input_stream& stream, Value& value, ParserError& error) noexcept
     {
         StreamReader streamReader(stream);
         ValueReader valueReader(value);
@@ -1894,7 +1894,7 @@ namespace ejson
         }
     }
 
-    inline void Write(const Value& value, string& str, bool prettify /*= false*/)
+    inline void Write(const Value& value, string& str, bool prettify /*= false*/) noexcept
     {
         StringClear(str);
         StringWriter stringWriter(str);
@@ -1912,7 +1912,7 @@ namespace ejson
         }
     }
 
-    inline void Write(const Value& value, output_stream& stream, bool prettify /*= false*/)
+    inline void Write(const Value& value, output_stream& stream, bool prettify /*= false*/) noexcept
     {
         StreamWriter streamWriter(stream);
         if (!prettify)
