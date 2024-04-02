@@ -133,15 +133,14 @@ namespace ejson
         str.append(other);
     }
 
-    inline void StringConvert(const c_string_view& src, w_string& dst )
+    inline w_string StringConvert(const c_string_view& src)
     {
-        dst.clear();
-        dst = w_string(src.begin(), src.end());
+        return w_string(src.begin(), src.end());
     }
 
-    inline void StringConvert(const w_string_view& src, c_string& dst )
+    inline c_string StringConvert(const w_string_view& src)
     {
-        dst.clear();
+        c_string dst;
         dst.reserve(src.size());
         for (wchar_t wc : src) 
         {
@@ -150,6 +149,7 @@ namespace ejson
             else 
                 dst.push_back('?');
         }
+        return dst;
     }
 
     inline void WriteNumber(number value, string& output) noexcept
@@ -1613,9 +1613,8 @@ namespace ejson
         size_t Write(const c_string_view& str) noexcept
         {
             w_string wstr;
-            StringConvert(str, wstr);
-            StringAdd(*string, wstr);
-            return StringSize(wstr);
+            StringAdd(*string, StringConvert(str));
+            return StringSize(str);
         }
         size_t Write(const w_string_view& str) noexcept
         {
@@ -1631,10 +1630,8 @@ namespace ejson
 
         size_t Write(const w_string_view& str) noexcept
         {
-            c_string cstr;
-            StringConvert(str, cstr);
-            StringAdd(*string, cstr);
-            return StringSize(cstr);
+            StringAdd(*string, StringConvert(str));
+            return StringSize(str);
         }
 #endif
 
@@ -1695,9 +1692,7 @@ namespace ejson
 #if EJSON_WCHAR
         size_t Write(const c_string_view& str) noexcept
         {
-            w_string wstr;
-            StringConvert(str, wstr);
-            return StreamWrite(stream, wstr);
+            return StreamWrite(stream, StringConvert(str));
         }
         size_t Write(const w_string_view& str) noexcept
         {
@@ -1711,9 +1706,7 @@ namespace ejson
 
         size_t Write(const w_string_view& str) noexcept
         {
-            c_string cstr;
-            StringConvert(str, cstr);
-            return StreamWrite(stream, cstr);
+            return StreamWrite(stream, StringConvert(str));
         }
 #endif
 

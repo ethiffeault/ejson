@@ -19,6 +19,8 @@
 //  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
+//
+// https://github.com/ethiffeault/eti
 
 #pragma once
 
@@ -244,7 +246,7 @@ namespace eti
             if constexpr (std::is_reference_v<T>)
             {
                 using PtrType = std::remove_reference_t<T>*;
-                return *static_cast<PtrType>(ptr);
+                return *static_cast<PtrType>(*(void**)ptr);
             }
             else
             {
@@ -274,6 +276,17 @@ namespace eti
             }
         };
 
+        template<typename RETURN, typename... ARGS>
+        struct CallStaticFunctionImpl<RETURN&, ARGS...>
+        {
+            static void Call(RETURN&(*func)(ARGS...), void*, void* ret, std::span<void*> args)
+            {
+                ETI_ASSERT(ret != nullptr, "call function that return void should have ret arg to nullptr");
+                auto args_tuple = utils::VoidArgsToTuple<ARGS...>(args, std::index_sequence_for<ARGS...>{});
+                std::apply([&](auto... applyArgs) { (*(void**)ret) = &func(*applyArgs...); }, args_tuple);
+            }
+        };
+
         // static function call no return
         template<typename... ARGS>
         struct CallStaticFunctionImpl<void, ARGS...>
@@ -295,6 +308,54 @@ namespace eti
             CallStaticFunctionImpl<RETURN, ARGS...>::Call(func, obj, ret, args);
         }
 
+        // static lambda function call
+
+        // static lambda function call with return value
+        template<typename RETURN, typename... ARGS>
+        struct CallStaticLambdaFunctionImpl
+        {
+            static void Call(std::function<RETURN(ARGS...)> func, void*, void* ret, std::span<void*> args)
+            {
+                ETI_ASSERT(ret != nullptr, "call function that return void should have ret arg to nullptr");
+                auto args_tuple = utils::VoidArgsToTuple<ARGS...>(args, std::index_sequence_for<ARGS...>{});
+                std::apply([&](auto... applyArgs) { *((RETURN*)ret) = func(*applyArgs...); }, args_tuple);
+            }
+        };
+
+        // static lambda function call with return ref
+        template<typename RETURN, typename... ARGS>
+        struct CallStaticLambdaFunctionImpl<RETURN&, ARGS...>
+        {
+            static void Call(std::function<RETURN&(ARGS...)> func, void*, void* ret, std::span<void*> args)
+            {
+                ETI_ASSERT(ret != nullptr, "call function that return void should have ret arg to nullptr");
+                auto args_tuple = utils::VoidArgsToTuple<ARGS...>(args, std::index_sequence_for<ARGS...>{});
+                std::apply([&](auto... applyArgs) { (*(void**)ret) = &func(*applyArgs...); }, args_tuple);
+            }
+        };
+
+        // static lambda function call no return
+        template<typename... ARGS>
+        struct CallStaticLambdaFunctionImpl<void, ARGS...>
+        {
+            static void Call(std::function<void(ARGS...)> func, void*, void* ret, std::span<void*> args)
+            {
+                ETI_ASSERT(ret == nullptr, "call function that return void should have ret arg to nullptr");
+                auto args_tuple = VoidArgsToTuple<ARGS...>(args, std::index_sequence_for<ARGS...>{});
+                std::apply([&](auto... applyArgs) { func(*applyArgs...); }, args_tuple);
+            }
+        };
+
+        // static lambda switch
+
+        template<typename RETURN, typename... ARGS>
+        void CallStaticLambda(std::function<RETURN(ARGS...)> func, void* obj, void* ret, std::span<void*> args)
+        {
+            ETI_ASSERT(sizeof...(ARGS) == args.size(), "invalid size of args");
+            ETI_ASSERT(obj == nullptr, "call lamda member function should have obj set to  nullptr");
+            CallStaticLambdaFunctionImpl<RETURN, ARGS...>::Call(func, obj, ret, args);
+        }
+
         // member function call
 
         // member function call with return value
@@ -308,6 +369,18 @@ namespace eti
                 std::apply([&](auto... applyArgs) { *((RETURN*)ret) = ((OBJECT*)obj->*func)(*applyArgs...); }, args_tuple);
             }
         };
+
+        template<typename OBJECT, typename RETURN, typename... ARGS>
+        struct CallMemberFunctionImpl<OBJECT, RETURN&, ARGS...>
+        {
+            static void Call(RETURN&(OBJECT::* func)(ARGS...), void* obj, void* ret, std::span<void*> args)
+            {
+                ETI_ASSERT(ret != nullptr, "internal error");
+                auto args_tuple = utils::VoidArgsToTuple<ARGS...>(args, std::index_sequence_for<ARGS...>{});
+                std::apply([&](auto... applyArgs) { (*(void**)ret) = &((OBJECT*)obj->*func)(*applyArgs...); }, args_tuple);
+            }
+        };
+
 
         // member function call void return
         template<typename OBJECT, typename... ARGS>
@@ -461,15 +534,15 @@ namespace eti
         const Variable* GetFunctionReturn(RETURN(OBJECT::* func)(ARGS...) const);
 
         template<typename RETURN, typename... ARGS>
-        std::span<Variable> GetFunctionVariables(RETURN(*func)(ARGS...));
+        std::span<Variable> GetFunctionArguments(RETURN(*func)(ARGS...));
 
         template<typename OBJECT, typename RETURN, typename... ARGS>
-        std::span<Variable> GetFunctionVariables(RETURN(OBJECT::* func)(ARGS...));
+        std::span<Variable> GetFunctionArguments(RETURN(OBJECT::* func)(ARGS...));
 
         template<typename OBJECT, typename RETURN, typename... ARGS>
-        std::span<Variable> GetFunctionVariables(RETURN(OBJECT::* func)(ARGS...) const);
+        std::span<Variable> GetFunctionArguments(RETURN(OBJECT::* func)(ARGS...) const);
 
-        static Method MakeMethod(std::string_view name, bool isStatic, bool isConst, const Type& parent, std::function<void(void*, void*, std::span<void*>)>&& function, const Variable* _return = nullptr, std::span<const Variable> arguments = {}, std::vector<std::shared_ptr<Attribute>>&& attributes = {});
+        static Method MakeMethod(std::string_view name, bool isStatic, bool isConst, const Type& parent, std::function<void(void*, void*, std::span<void*>)>&& function, const Variable* _return = nullptr, std::span<const Variable> arguments = {}, std::vector<std::shared_ptr<Attribute>>&& attributes = {}, bool isLambda = false);
 
         //
         // Property
@@ -540,6 +613,8 @@ namespace eti
 #endif
 
     static constexpr void* NoReturn = nullptr;
+
+    static constexpr size_t InvalidIndex = std::numeric_limits<std::size_t>::max();
 
     // user may specialize this per type to have custom name (be careful to hash clash)
     //  ex: use in ETI_POD_EXT macro
@@ -649,6 +724,7 @@ namespace eti
         TypeId MethodId = 0;
         bool IsStatic:1 = false;
         bool IsConst:1 = false;
+        bool IsLambda:1 = false;
         std::function<void(void*, void*, std::span<void*>)> Function;
         const Variable* Return;
         std::span<const Variable> Arguments;
@@ -723,6 +799,7 @@ namespace eti
         const T* HaveAttribute() const;
 
         // enum
+        std::size_t GetEnumValue(std::string_view enumName) const;
         std::string_view GetEnumValueName(std::size_t enumValue) const;
         TypeId GetEnumValueHash(std::size_t enumValue) const;
     };
@@ -785,7 +862,46 @@ namespace eti
             ::eti::utils::CallFunction(&Self::NAME, obj, _return, args); \
         }, \
         ::eti::internal::GetFunctionReturn(&Self::NAME), \
-        ::eti::internal::GetFunctionVariables(&Self::NAME), \
+        ::eti::internal::GetFunctionArguments(&Self::NAME), \
+        ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__))
+
+#define ETI_METHOD_LAMBDA(NAME, LAMBDA, ...) \
+    ::eti::internal::MakeMethod(#NAME, \
+        false, \
+        false, \
+        ::eti::TypeOf<Self>(), \
+        [](void* obj, void* _return, std::span<void*> args) \
+        { \
+            ::eti::utils::CallStaticLambda(std::function(LAMBDA), obj, _return, args); \
+        }, \
+        ::eti::internal::GetFunctionReturn(std::function(LAMBDA)), \
+        ::eti::internal::GetFunctionArguments( std::function(LAMBDA)), \
+        ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__), true)
+
+#define ETI_METHOD_STATIC_LAMBDA(NAME, LAMBDA, ...) \
+    ::eti::internal::MakeMethod(#NAME, \
+        true, \
+        false, \
+        ::eti::TypeOf<Self>(), \
+        [](void* obj, void* _return, std::span<void*> args) \
+        { \
+            ::eti::utils::CallStaticLambda(std::function(LAMBDA), obj, _return, args); \
+        }, \
+        ::eti::internal::GetFunctionReturn(std::function(LAMBDA)), \
+        ::eti::internal::GetFunctionArguments( std::function(LAMBDA)), \
+        ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__))
+
+#define ETI_METHOD_OVERLOAD(NAME, METHOD_TYPE, ...) \
+    ::eti::internal::MakeMethod(#NAME, \
+        ::eti::utils::IsMethodStatic<decltype((METHOD_TYPE)&Self::NAME)>, \
+        ::eti::utils::IsMethodConst<decltype((METHOD_TYPE)&Self::NAME)>, \
+        ::eti::TypeOf<Self>(), \
+        [](void* obj, void* _return, std::span<void*> args) \
+        { \
+            ::eti::utils::CallFunction((METHOD_TYPE)&Self::NAME, obj, _return, args); \
+        }, \
+        ::eti::internal::GetFunctionReturn((METHOD_TYPE)&Self::NAME), \
+        ::eti::internal::GetFunctionArguments((METHOD_TYPE)&Self::NAME), \
         ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__))
 
 #define ETI_INTERNAL_METHOD(...) \
@@ -978,7 +1094,7 @@ namespace eti
     }
 
 
-#define ETI_TEMPLATE_1(TEMPLATE_NAME) \
+#define ETI_TEMPLATE_1_EXTERNAL(TEMPLATE_NAME, PROPERTIES, METHODS, ...) \
     namespace eti \
     { \
         template <typename T1> \
@@ -992,14 +1108,16 @@ namespace eti
                 if (initializing == false) \
                 { \
                     initializing = true; \
-                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, {}, {}, ::eti::internal::GetTypes<T1>()); \
+                    static std::vector<::eti::Property> properties = { PROPERTIES }; \
+                    static std::vector<::eti::Method> methods =  { METHODS  }; \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::GetTypes<T1>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
                 } \
                 return type; \
             } \
         }; \
     }
 
-#define ETI_TEMPLATE_2(TEMPLATE_NAME) \
+#define ETI_TEMPLATE_2_EXTERNAL(TEMPLATE_NAME, PROPERTIES, METHODS, ...) \
     namespace eti \
     { \
         template <typename T1, typename T2> \
@@ -1007,13 +1125,15 @@ namespace eti
         { \
             static const ::eti::Type& GetTypeStatic() \
             { \
-                using Self = TEMPLATE_NAME<T1, T2>; \
+                using Self = TEMPLATE_NAME<T1,T2>; \
                 static bool initializing = false; \
                 static ::eti::Type type; \
                 if (initializing == false) \
                 { \
                     initializing = true; \
-                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, {}, {}, ::eti::internal::GetTypes<T1, T2>()); \
+                    static std::vector<::eti::Property> properties = { PROPERTIES }; \
+                    static std::vector<::eti::Method> methods =  { METHODS  }; \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::GetTypes<T1,T2>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
                 } \
                 return type; \
             } \
@@ -1092,21 +1212,33 @@ namespace eti
             return internal::GetVariable<RETURN>("");
         }
 
+        template<typename RETURN, typename... ARGS>
+        const Variable* GetFunctionReturn( std::function<RETURN(ARGS...)> )
+        {
+            return internal::GetVariable<RETURN>("");
+        }
+
 
         template<typename RETURN, typename... ARGS>
-        std::span<Variable> GetFunctionVariables(RETURN(*)(ARGS...))
+        std::span<Variable> GetFunctionArguments(RETURN(*)(ARGS...))
         {
             return internal::GetVariables<ARGS...>();
         }
 
         template<typename OBJECT, typename RETURN, typename... ARGS>
-        std::span<Variable> GetFunctionVariables(RETURN(OBJECT::*)(ARGS...))
+        std::span<Variable> GetFunctionArguments(RETURN(OBJECT::*)(ARGS...))
         {
             return internal::GetVariables<ARGS...>();
         }
 
         template<typename OBJECT, typename RETURN, typename... ARGS>
-        std::span<Variable> GetFunctionVariables(RETURN(OBJECT::*)(ARGS...) const)
+        std::span<Variable> GetFunctionArguments(RETURN(OBJECT::*)(ARGS...) const)
+        {
+            return internal::GetVariables<ARGS...>();
+        }
+
+        template<typename RETURN, typename... ARGS>
+        std::span<Variable> GetFunctionArguments( std::function<RETURN(ARGS...)> )
         {
             return internal::GetVariables<ARGS...>();
         }
@@ -1132,7 +1264,7 @@ namespace eti
         //
         // Method
 
-        inline Method MakeMethod(std::string_view name, bool isStatic, bool isConst, const Type& parent, std::function<void(void*, void*, std::span<void*>)>&& function, const Variable* _return /*= nullptr*/, std::span<const Variable> arguments /*= {}*/, std::vector<std::shared_ptr<Attribute>>&& attributes /*= {}*/)
+        inline Method MakeMethod(std::string_view name, bool isStatic, bool isConst, const Type& parent, std::function<void(void*, void*, std::span<void*>)>&& function, const Variable* _return /*= nullptr*/, std::span<const Variable> arguments /*= {}*/, std::vector<std::shared_ptr<Attribute>>&& attributes /*= {}*/, bool isLambda /*= false*/)
         {
             return
             {
@@ -1140,6 +1272,7 @@ namespace eti
                 utils::GetStringHash(name),
                 isStatic,
                 isConst,
+                isLambda,
                 function,
                 _return,
                 arguments,
@@ -1372,8 +1505,14 @@ namespace eti
     template<typename T>
     void ValidateArgument(const Variable& argument, int index)
     {
-        if (argument.Declaration.IsPtr || argument.Declaration.IsRef)
+        if (argument.Declaration.IsPtr)
         {
+            ETI_ASSERT(std::is_pointer_v<T>, "expected pointer argument");
+            ETI_ASSERT(IsA(TypeOf<T>(), argument.Declaration.Type), "argument " << index << " must be of type: " << argument.Declaration.Type.Name << ", not " << TypeOf<T>().Name);
+        }
+        else if ( argument.Declaration.IsRef)
+        {
+            ETI_ASSERT(std::is_pointer_v<T>, "expected pointer as arguments (for ref use pointer)");
             ETI_ASSERT(IsA(TypeOf<T>(), argument.Declaration.Type), "argument " << index << " must be of type: " << argument.Declaration.Type.Name << ", not " << TypeOf<T>().Name);
         }
         else
@@ -1403,7 +1542,10 @@ namespace eti
         else
             ETI_ASSERT(Return->Declaration.Type.Kind != Kind::Void, "missing return value on method with return: " << Parent->Name << "::" << Name <<"()");
 
-        ValidateArguments<ARGS...>(Arguments);
+        if (!IsLambda)
+            ValidateArguments<ARGS...>(Arguments);
+        else
+            ValidateArguments<PARENT*, ARGS...>(Arguments);
 
         std::vector<void*> voidArgs = internal::GetVoidPtrFromArgs(args...);
 
@@ -1437,7 +1579,17 @@ namespace eti
         else
             ETI_ASSERT(ret != nullptr, "try to call method with return value, but provided return argument is nullptr");
 
-        this->Function(obj, ret, args);
+        if (IsLambda)
+        {
+            std::vector<void*> objArgs;
+            objArgs.push_back(&obj);
+            objArgs.insert(objArgs.end(), args.begin(), args.end());
+            this->Function(nullptr, ret, objArgs);
+        }
+        else
+        {
+            this->Function(obj, ret, args);
+        }
     }
 
 #pragma endregion
@@ -1532,6 +1684,16 @@ namespace eti
     const T* Type::HaveAttribute() const
     {
         return GetAttribute<T>() != nullptr;
+    }
+
+    inline std::size_t Type::GetEnumValue(std::string_view enumName) const
+    {
+        for( size_t i = 0; i < EnumSize; ++i )
+        {
+            if (GetEnumValueName(i) == enumName)
+                return i;
+        }
+        return InvalidIndex;
     }
 
     inline std::string_view Type::GetEnumValueName(size_t enumValue) const
@@ -1705,7 +1867,100 @@ ETI_POD_EXT(std::uint64_t, u64);
 ETI_POD_EXT(std::float_t, f32);
 ETI_POD_EXT(std::double_t, f64);
 
-ETI_TEMPLATE_1(std::vector)
-ETI_TEMPLATE_2(std::map)
+class Object
+{
+    ETI_BASE(Object)
+public:
+    virtual ~Object(){}
+};
+
+namespace eti::utils
+{
+    template<typename T>
+    void VectorAddAt( std::vector<T>& vector, size_t index, const T& value)
+    {
+        ETI_ASSERT(index >= 0 && index <= vector.size(), "invalid index");
+        vector.insert(vector.begin() + index, value);
+    }
+
+    template<typename T>
+    bool VectorContains( std::vector<T>& vector, const T& value)
+    {
+        auto it = std::find(vector.begin(), vector.end(), value);
+        return it != vector.end();
+    }
+
+    template<typename T>
+    bool VectorRemove( std::vector<T>& vector, const T& value)
+    {
+        auto it = std::find(vector.begin(), vector.end(), value);
+        if (it != vector.end())
+        {
+            vector.erase(it);
+            return true;
+        }
+        return false;
+    }
+
+    template<typename T>
+    bool VectorRemoveSwap(std::vector<T>& vector, const T& value)
+    {
+        auto it = std::find(vector.begin(), vector.end(), value);
+        if (it != vector.end()) 
+        {
+            if (it != vector.end() - 1)
+                std::swap(*it, vector.back());
+            vector.pop_back();
+            return true;
+        }
+        return false;
+    }
+
+    template<typename T>
+    void VectorRemoveAt( std::vector<T>& vector, size_t index)
+    {
+        ETI_ASSERT(index >= 0 && index < vector.size(), "invalid index");
+        vector.erase(vector.begin() + index);
+    }
+
+    template<typename T>
+    void VectorRemoveAtSwap( std::vector<T>& vector, size_t index)
+    {
+        ETI_ASSERT(index >= 0 && index < vector.size(), "invalid index");
+        std::swap(vector[index], vector.back());
+        vector.pop_back();
+    }
+}
+
+// declare vector type with common methods
+ETI_TEMPLATE_1_EXTERNAL
+(std::vector, 
+    ETI_PROPERTIES(), 
+    ETI_METHODS
+    (
+        ETI_METHOD_LAMBDA(GetSize, [](const std::vector<T1>& vector) { return vector.size(); }),
+        ETI_METHOD_LAMBDA(GetAt, [](std::vector<T1>& vector, size_t index) -> T1& { return vector[index]; }),
+        ETI_METHOD_LAMBDA(Add, [](std::vector<T1>& vector, const T1& value) { return vector.push_back(value); }),
+        ETI_METHOD_LAMBDA(AddAt, [](std::vector<T1>& vector, size_t index, const T1& value) { eti::utils::VectorAddAt(vector, index, value); }),
+        ETI_METHOD_LAMBDA(Contains, [](std::vector<T1>& vector, const T1& value) { return eti::utils::VectorContains(vector, value); }),
+        ETI_METHOD_LAMBDA(Remove, [](std::vector<T1>& vector, const T1& value) { return eti::utils::VectorRemove(vector, value); }),
+        ETI_METHOD_LAMBDA(RemoveSwap, [](std::vector<T1>& vector, const T1& value) { return eti::utils::VectorRemoveSwap(vector, value); }),
+        ETI_METHOD_LAMBDA(RemoveAt, [](std::vector<T1>& vector, size_t index) { return eti::utils::VectorRemoveAt(vector, index); }),
+        ETI_METHOD_LAMBDA(RemoveAtSwap, [](std::vector<T1>& vector, size_t index) { return eti::utils::VectorRemoveAtSwap(vector, index); }),
+        ETI_METHOD_LAMBDA(Clear, [](std::vector<T1>& vector) { vector.clear(); }),
+        ETI_METHOD_LAMBDA(Reserve, [](std::vector<T1>& vector, size_t size) { vector.reserve(size); })
+    )
+)
+
+// todo: declare map type with common methods
+ETI_TEMPLATE_2_EXTERNAL
+(
+    std::map,
+    ETI_PROPERTIES(),
+    ETI_METHODS
+    (
+        ETI_METHOD_LAMBDA(GetSize, [](std::map<T1,T2>& map) { return map.size(); })
+    )
+)
 
 #endif // #if ETI_COMMON_TYPE

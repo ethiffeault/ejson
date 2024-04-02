@@ -49,7 +49,7 @@ namespace ejson
 
     private:
 
-        void WriteStruct(const eti::Type& type, const void* value)
+        void WriteStruct(const eti::Type& type, const void* value) noexcept
         {
             jsonWriter.WriteObjectBegin();
             for( const Property& property : type.Properties )
@@ -61,7 +61,7 @@ namespace ejson
             jsonWriter.WriteObjectEnd();
         }
 
-        void WritePod(const eti::Type& type, const void* value)
+        void WritePod(const eti::Type& type, const void* value) noexcept
         {
             switch (type.Id)
             {
@@ -108,19 +108,221 @@ namespace ejson
             }
         }
 
-        void WriteEnum(const eti::Type& type, const void* value)
+        void WriteEnum(const eti::Type& type, const void* value) noexcept
         {
-            // todo
+            s64 enumValue = -1;
+            switch (type.Parent->Id)
+            {
+                case GetTypeId<u8>():
+                    enumValue = *(u8*)value;
+                    break;
+                case GetTypeId<u16>():
+                    enumValue = *(u16*)value;
+                    break;
+                case GetTypeId<u32>():
+                    enumValue = *(u32*)value;
+                    break;
+                case GetTypeId<u64>():
+                    enumValue = (s64)*(u64*)value;
+                    break;
+
+                case GetTypeId<s8>():
+                    enumValue = *(s8*)value;
+                    break;
+                case GetTypeId<s16>():
+                    enumValue = *(s16*)value;
+                    break;
+                case GetTypeId<s32>():
+                    enumValue = *(s32*)value;
+                    break;
+                case GetTypeId<s64>():
+                    enumValue = *(s64*)value;
+                    break;
+
+                default:
+                    break;
+            }
+
+            if ( enumValue >= 0 && enumValue < (s64)type.EnumSize)
+            {
+                jsonWriter.WriteString(type.GetEnumValueName(enumValue));
+            }
+            else
+            {
+                jsonWriter.WriteString("invalid");
+            }
         }
 
-        void WriteTemplate(const eti::Type& type, const void* value)
+        void WriteTemplate(const eti::Type& type, const void* value) noexcept
         {
-            // todo
+            // vector
+            if (type.Name.starts_with("std::vector"))
+            {
+                jsonWriter.WriteArrayBegin();
+                size_t size;
+                type.GetMethod("GetSize")->UnSafeCall((void*)value, &size, {});
+                const Type& itemType = *type.Templates[0];
+                const Method* getAt = type.GetMethod("GetAt");
+                for (size_t i = 0; i < size; ++i)
+                {
+                    void* ptr = nullptr;
+                    void* args[1] = { &i };
+                    getAt->UnSafeCall((void*)value, &ptr, args );
+                    Write(*type.Templates[0], ptr);
+                }
+                jsonWriter.WriteArrayEnd();
+            }
+
+            // map
+            if (type.Name.starts_with("std::map"))
+            {
+                // todo
+                jsonWriter.WriteNull();
+            }
         }
 
         JSON_WRITER& jsonWriter;
 
     };
+
+    struct TypeReader
+    {
+        TypeReader(void* root, const Type* type) noexcept
+        {
+            PushContext(root, type);
+        }
+
+        void ObjectBegin() noexcept
+        {
+            if (!current->value)
+                return;
+
+        }
+
+        void ObjectEnd() noexcept
+        {
+            if (!current->value)
+                return;
+        }
+
+        void PropertyBegin(const string_view& key) noexcept
+        {
+            if (current->value)
+            {
+                const Property* property = current->type->GetProperty(StringConvert(key));
+                if (property)
+                {
+                    const Type* propertyType = &property->Variable.Declaration.Type;
+                    void* propertyPtr = ((u8*)current->value) + property->Offset;
+                    PushContext(propertyPtr, propertyType);
+                    return;
+                }
+            }
+
+            PushContext(nullptr, nullptr);
+        }
+
+        void PropertyEnd() noexcept
+        {
+            PopContext();
+        }
+
+        void ArrayBegin() noexcept
+        {
+            if (!current->value)
+                return;
+        }
+
+        void ArrayEnd() noexcept
+        {
+            if (!current->value)
+                return;
+        }
+
+        void ValueBool(bool b) noexcept
+        {
+            if (!current->value)
+                return;
+        }
+
+        void ValueNull() noexcept
+        {
+            if (!current->value)
+                return;
+        }
+
+        void ValueString(const string_view& str) noexcept
+        {
+            if (!current->value)
+                return;
+
+            if ( current->type->Kind == Kind::Enum)
+            {
+                size_t enumValue = current->type->GetEnumValue(StringConvert(str));
+                if (enumValue != InvalidIndex)
+                {
+                    switch (current->type->Parent->Id )
+                    {
+                        case GetTypeId<u8>():
+                            *(u8*)current->value = (u8)enumValue;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+            else if ( *current->type == TypeOf<std::string>())
+            {
+                *((std::string*)current->value) = StringConvert(str);
+            }
+        }
+
+        void ValueNumber(const string_view& str) noexcept
+        {
+        }
+
+    private:
+
+        struct Context
+        {
+            void* value;
+            const Type* type;
+        };
+
+        void PushContext(void* value, const Type* type)
+        {
+            contexts.push_back({ value, type });
+            current = &contexts[contexts.size() - 1];
+        }
+
+        void PopContext()
+        {
+            contexts.pop_back();
+            current = contexts.size() ? &contexts[contexts.size() - 1] : nullptr;
+        }
+
+        Context* current = nullptr;
+
+        std::vector<Context> contexts;
+    };
+
+    template <typename T>
+    bool ReadType(string_view json, T& value, ParserError& error) noexcept
+    {
+        StringReader stringReader(json);
+        TypeReader valueReader(&value, &TypeOf<T>());
+        JsonReader jsonReader(valueReader, stringReader);
+        if (jsonReader.Parse())
+        {
+            return true;
+        }
+        else
+        {
+            error = jsonReader.GetError();
+            return false;
+        }
+
+    }
 
     template <typename T>
     void WriteType(const T& value, string& str, bool prettify = false ) noexcept
@@ -142,7 +344,7 @@ namespace ejson
     }
 
     template <typename T>
-    inline void Write(const T& value, output_stream& stream, bool prettify /*= false*/) noexcept
+    void Write(const T& value, output_stream& stream, bool prettify = false) noexcept
     {
         StreamWriter streamWriter(stream);
         if (!prettify)
