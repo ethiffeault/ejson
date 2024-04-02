@@ -47,13 +47,15 @@ namespace unittest
             ETI_PROPERTIES
             (
                 ETI_PROPERTY(CurrentDay),
-                ETI_PROPERTY(Data)
+                ETI_PROPERTY(Data),
+                ETI_PROPERTY(Point)
             ),
             ETI_METHODS()
         )
     public:
         Day CurrentDay = Day::Friday;
         std::vector<u32> Data = { 1,2 };
+        Point Point;
     };
 
     TEST_CASE("test_01")
@@ -65,15 +67,20 @@ namespace unittest
 
         Foo foo;
         WriteType(foo, json);
-        REQUIRE(json == EJSON_TEXT("{\"CurrentDay\":\"Friday\",\"Data\":[1,2]}"));
+        REQUIRE(json == EJSON_TEXT("{\"CurrentDay\":\"Friday\",\"Data\":[1,2],\"Point\":{\"X\":0,\"Y\":0}}"));
 
         Foo foo2;
         foo2.Data.clear();
         foo2.CurrentDay = Day::Monday;
+        foo2.Point.X = 1;
+        foo2.Point.Y = 1;
 
         ParserError error;
         ReadType(json, foo2, error);
         REQUIRE(foo2.CurrentDay == Day::Friday);
+        REQUIRE(foo2.Data.size() == 2);
+        REQUIRE(foo2.Point.X == 0);
+        REQUIRE(foo2.Point.Y == 0);
     }
 }
 ETI_ENUM_IMPL(unittest::Day);

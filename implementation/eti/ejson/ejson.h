@@ -133,12 +133,22 @@ namespace ejson
         str.append(other);
     }
 
-    inline w_string StringConvert(const c_string_view& src)
+    inline w_string ToWString(const c_string_view& src)
     {
         return w_string(src.begin(), src.end());
     }
 
-    inline c_string StringConvert(const w_string_view& src)
+    inline w_string ToWString(const w_string_view& src)
+    {
+        return w_string(src);
+    }
+
+    inline c_string ToString(const c_string_view& src)
+    {
+        return c_string(src);
+    }
+
+    inline c_string ToString(const w_string_view& src)
     {
         c_string dst;
         dst.reserve(src.size());
@@ -1230,8 +1240,12 @@ namespace ejson
                 case Token::SquaredOpen:
                     return ParseArray();
                 case Token::Number:
-                    listener->ValueNumber(value);
+                {
+                    number number = 0;
+                    ::ejson::ParseNumber(value, number);
+                    listener->ValueNumber(number);
                     return true;
+                }
                 case Token::String:
                     listener->ValueString(value);
                     return true;
@@ -1613,7 +1627,7 @@ namespace ejson
         size_t Write(const c_string_view& str) noexcept
         {
             w_string wstr;
-            StringAdd(*string, StringConvert(str));
+            StringAdd(*string, ToWString(str));
             return StringSize(str);
         }
         size_t Write(const w_string_view& str) noexcept
@@ -1630,7 +1644,7 @@ namespace ejson
 
         size_t Write(const w_string_view& str) noexcept
         {
-            StringAdd(*string, StringConvert(str));
+            StringAdd(*string, ToString(str));
             return StringSize(str);
         }
 #endif
@@ -1692,7 +1706,7 @@ namespace ejson
 #if EJSON_WCHAR
         size_t Write(const c_string_view& str) noexcept
         {
-            return StreamWrite(stream, StringConvert(str));
+            return StreamWrite(stream, ToWString(str));
         }
         size_t Write(const w_string_view& str) noexcept
         {
@@ -1706,7 +1720,7 @@ namespace ejson
 
         size_t Write(const w_string_view& str) noexcept
         {
-            return StreamWrite(stream, StringConvert(str));
+            return StreamWrite(stream, ToString(str));
         }
 #endif
 
@@ -1779,10 +1793,8 @@ namespace ejson
             SetValue(EJSON_MOVE(value));
         }
 
-        void ValueNumber(const string_view& str) noexcept
+        void ValueNumber(number number) noexcept
         {
-            number number = 0;
-            ParseNumber(str, number);
             Value value;
             value.SetNumber(number);
             SetValue(EJSON_MOVE(value));

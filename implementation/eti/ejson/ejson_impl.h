@@ -56,7 +56,7 @@ namespace ejson
             {
                 jsonWriter.WriteProperty(property.Variable.Name);
                 void* propertyValue = property.UnSafeGetPtr(const_cast<void*>(value));
-                Write(property.Variable.Declaration.Type, propertyValue);
+                Write(*property.Variable.Declaration.Type, propertyValue);
             }
             jsonWriter.WriteObjectEnd();
         }
@@ -189,32 +189,32 @@ namespace ejson
     {
         TypeReader(void* root, const Type* type) noexcept
         {
-            PushContext(root, type);
+            rootDeclaration = { type, true };
+            PushContext(root, &rootDeclaration);
         }
 
         void ObjectBegin() noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
 
         }
 
         void ObjectEnd() noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
         }
 
         void PropertyBegin(const string_view& key) noexcept
         {
-            if (current->value)
+            if (current->Value)
             {
-                const Property* property = current->type->GetProperty(StringConvert(key));
+                const Property* property = current->Declaration->Type->GetProperty(ToString(key));
                 if (property)
                 {
-                    const Type* propertyType = &property->Variable.Declaration.Type;
-                    void* propertyPtr = ((u8*)current->value) + property->Offset;
-                    PushContext(propertyPtr, propertyType);
+                    void* propertyPtr = ((u8*)current->Value) + property->Offset;
+                    PushContext(propertyPtr, &property->Variable.Declaration);
                     return;
                 }
             }
@@ -229,70 +229,199 @@ namespace ejson
 
         void ArrayBegin() noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
+            if (current->IsVector)
+                current->Declaration->Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});
         }
 
         void ArrayEnd() noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
         }
 
         void ValueBool(bool b) noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
+
+            if ( *current->Declaration->Type == TypeOf<bool>())
+            {
+                *(bool*)current->Value = b;
+            }
         }
 
         void ValueNull() noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
+
+            if (current->Declaration->IsPtr)
+            {
+                *(void**)current->Value = nullptr;
+            }
         }
 
         void ValueString(const string_view& str) noexcept
         {
-            if (!current->value)
+            if (!current->Value)
                 return;
 
-            if ( current->type->Kind == Kind::Enum)
+            if (current->Declaration->Type->Kind == Kind::Enum)
             {
-                size_t enumValue = current->type->GetEnumValue(StringConvert(str));
+                size_t enumValue = current->Declaration->Type->GetEnumValue(ToString(str));
                 if (enumValue != InvalidIndex)
                 {
-                    switch (current->type->Parent->Id )
+                    switch (current->Declaration->Type->Parent->Id )
                     {
+                        case GetTypeId<s8>():
+                            *(s8*)current->Value = (s8)enumValue;
+                            break;
+                        case GetTypeId<s16>():
+                            *(s16*)current->Value = (s16)enumValue;
+                            break;
+                        case GetTypeId<s32>():
+                            *(s32*)current->Value = (s32)enumValue;
+                            break;
+                        case GetTypeId<s64>():
+                            *(s64*)current->Value = (s64)enumValue;
+                            break;
                         case GetTypeId<u8>():
-                            *(u8*)current->value = (u8)enumValue;
+                            *(u8*)current->Value = (u8)enumValue;
+                            break;
+                        case GetTypeId<u16>():
+                            *(u16*)current->Value = (u16)enumValue;
+                            break;
+                        case GetTypeId<u32>():
+                            *(u32*)current->Value = (u32)enumValue;
+                            break;
+                        case GetTypeId<u64>():
+                            *(u64*)current->Value = enumValue;
                             break;
                         default:
                             break;
                     }
                 }
             }
-            else if ( *current->type == TypeOf<std::string>())
+            else if (*current->Declaration->Type == TypeOf<std::string>())
             {
-                *((std::string*)current->value) = StringConvert(str);
+                *((std::string*)current->Value) = ToString(str);
+            }
+            else if (*current->Declaration->Type == TypeOf<std::wstring>())
+            {
+                *((std::wstring*)current->Value) = ToWString(str);
             }
         }
 
-        void ValueNumber(const string_view& str) noexcept
+        void ValueNumber(number value) noexcept
         {
+            if (!current->Value)
+                return;
+
+            if (current->IsVector)
+            {
+                switch (current->Declaration->Type->Templates[0]->Id)
+                {
+                    case GetTypeId<s8>():
+                        VectorAdd((s8)value);
+                        break;
+                    case GetTypeId<s16>():
+                        VectorAdd((s16)value);
+                        break;
+                    case GetTypeId<s32>():
+                        VectorAdd((s32)value);
+                        break;
+                    case GetTypeId<s64>():
+                        VectorAdd((s64)value);
+                        break;
+                    case GetTypeId<u8>():
+                        VectorAdd((u8)value);
+                        break;
+                    case GetTypeId<u16>():
+                        VectorAdd((u16)value);
+                        break;
+                    case GetTypeId<u32>():
+                        VectorAdd((u32)value);
+                        break;
+                    case GetTypeId<u64>():
+                        VectorAdd((u64)value);
+                        break;
+                    case GetTypeId<f32>():
+                        VectorAdd((f32)value);
+                        break;
+                    case GetTypeId<f64>():
+                        VectorAdd(value);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                switch (current->Declaration->Type->Id)
+                {
+                    case GetTypeId<s8>():
+                        *(s8*)current->Value = (s8)value;
+                        break;
+                    case GetTypeId<s16>():
+                        *(s16*)current->Value = (s16)value;
+                        break;
+                    case GetTypeId<s32>():
+                        *(s32*)current->Value = (s32)value;
+                        break;
+                    case GetTypeId<s64>():
+                        *(s64*)current->Value = (s64)value;
+                        break;
+                    case GetTypeId<u8>():
+                        *(u8*)current->Value = (u8)value;
+                        break;
+                    case GetTypeId<u16>():
+                        *(u16*)current->Value = (u16)value;
+                        break;
+                    case GetTypeId<u32>():
+                        *(u32*)current->Value = (u32)value;
+                        break;
+                    case GetTypeId<u64>():
+                        *(u64*)current->Value = (u64)value;
+                        break;
+                    case GetTypeId<f32>():
+                        *(f32*)current->Value = (f32)value;
+                        break;
+                    case GetTypeId<f64>():
+                        *(f64*)current->Value = (f64)value;
+                        break;
+                    default:
+                        break;
+                }
+            }
         }
 
     private:
 
         struct Context
         {
-            void* value;
-            const Type* type;
+            void* Value = nullptr;
+            const Declaration* Declaration = nullptr;
+            bool IsVector = false;
+            const Type* T1 = nullptr;
+            const Type* T2 = nullptr;
+            const Method* Add = nullptr;
+            
         };
 
-        void PushContext(void* value, const Type* type)
+        void PushContext(void* value, const Declaration* declaration)
         {
-            contexts.push_back({ value, type });
-            current = &contexts[contexts.size() - 1];
+            if (declaration->Type->Name.starts_with("std::vector"))
+            {
+                contexts.push_back({value, declaration, true, declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add")});
+                current = &contexts[contexts.size() - 1];
+            }
+            else
+            {
+                contexts.push_back({ value, declaration, false });
+                current = &contexts[contexts.size() - 1];
+            }
         }
 
         void PopContext()
@@ -301,7 +430,18 @@ namespace ejson
             current = contexts.size() ? &contexts[contexts.size() - 1] : nullptr;
         }
 
+        template <typename T>
+        void VectorAdd(const T& value)
+        {
+            EJSON_ASSERT(current->Add != nullptr, "not a vector");
+            EJSON_ASSERT(*current->Declaration->Type->Templates[0] == TypeOf<T>(), "not vaid vector type" );
+            const T* ptr = &value;
+            void* args[1] = { (void*) &ptr};
+            current->Add->UnSafeCall(current->Value, NoReturn, args);
+        }
+
         Context* current = nullptr;
+        Declaration rootDeclaration = {};
 
         std::vector<Context> contexts;
     };
