@@ -8,20 +8,44 @@
 using namespace eti;
 using namespace ejson;
 
-namespace unittest
+namespace test
 {
     ETI_ENUM
     (
         std::uint8_t, Day,
-            Monday,
-            Tuesday,
-            Wednesday,
-            Thursday,
-            Friday,
-            Saturday,
-            Sunday
+        Monday,
+        Tuesday,
+        Wednesday,
+        Thursday,
+        Friday,
+        Saturday,
+        Sunday
     )
 
+    struct Point
+    {
+        ETI_STRUCT_EXT
+        (
+            Point,
+            ETI_PROPERTIES
+            (
+                ETI_PROPERTY(X),
+                ETI_PROPERTY(Y)
+            ),
+            ETI_METHODS()
+        )
+
+        float X = 0.0f;
+        float Y = 0.0f;
+    };
+
+}
+ETI_ENUM_IMPL(test::Day);
+
+using namespace test;
+
+namespace test_01
+{
     struct Point
     {
         ETI_STRUCT_EXT
@@ -83,4 +107,51 @@ namespace unittest
         REQUIRE(foo2.Point.Y == 0);
     }
 }
-ETI_ENUM_IMPL(unittest::Day);
+
+namespace test_02
+{
+    class Foo : public Object
+    {
+        ETI_CLASS_EXT
+        (
+            Foo, Object,
+            ETI_PROPERTIES
+            (
+                ETI_PROPERTY(PointPtr)
+            ),
+            ETI_METHODS()
+        )
+    public:
+        Point* PointPtr = nullptr;
+    };
+
+    TEST_CASE("test_02")
+    {
+        {
+            string json;
+            Foo foo;
+            WriteType(foo, json);
+            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":null}"));
+        }
+
+        {
+            //string json = EJSON_TEXT("{\"PointPtr\":null}");
+            //ParserError error;
+            //Foo* foo = nullptr;
+            //ReadType(json, foo, error);
+            //REQUIRE(foo != nullptr);
+        }
+
+        {
+            string json;
+            Foo foo;
+            foo.PointPtr = new Point();
+            WriteType(foo, json);
+            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":{\"X\":0,\"Y\":0}}"));
+            delete (foo.PointPtr);
+            foo.PointPtr = nullptr;
+        }
+
+    }
+}
+

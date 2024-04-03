@@ -16,27 +16,43 @@ namespace ejson
             :jsonWriter(jsonWriter)
         {}
 
-        void Write(const eti::Type& type, const void* value) noexcept
+        void Write(const eti::Declaration& declaration, const void* value) noexcept
         {
-            switch (type.Kind)
+            if (declaration.IsPtr)
+            {
+                const void** ptrValue = (const void**)value;
+                if (*ptrValue == nullptr)
+                {
+                    jsonWriter.WriteNull();
+                    return;
+                }
+                else
+                {
+                    value = *ptrValue;
+                }
+            }
+
+            EJSON_ASSERT(value != nullptr, "cannot be null when not a ptr");
+
+            switch (declaration.Type->Kind)
             {
             case Kind::Void:
                 jsonWriter.WriteNull();
                 break;
             case Kind::Class:
-                WriteStruct(type, value);
+                WriteStruct(declaration, value);
                 break;
             case Kind::Struct:
-                WriteStruct(type, value);
+                WriteStruct(declaration, value);
                 break;
             case Kind::Pod:
-                WritePod(type, value);
+                WritePod(declaration, value);
                 break;
             case Kind::Enum:
-                WriteEnum(type, value);
+                WriteEnum(declaration, value);
                 break;
             case Kind::Template:
-                WriteTemplate(type, value);
+                WriteTemplate(declaration, value);
                 break;
             case Kind::Unknown:
                 jsonWriter.WriteNull();
@@ -49,21 +65,28 @@ namespace ejson
 
     private:
 
-        void WriteStruct(const eti::Type& type, const void* value) noexcept
+        void WriteStruct(const eti::Declaration& declaration, const void* value) noexcept
         {
+            if (declaration.IsPtr && value == nullptr)
+            {
+                jsonWriter.WriteNull();
+                return;
+            }
+            EJSON_ASSERT(value != nullptr, "cannot be null if not ptr");
+
             jsonWriter.WriteObjectBegin();
-            for( const Property& property : type.Properties )
+            for (const Property& property : declaration.Type->Properties)
             {
                 jsonWriter.WriteProperty(property.Variable.Name);
                 void* propertyValue = property.UnSafeGetPtr(const_cast<void*>(value));
-                Write(*property.Variable.Declaration.Type, propertyValue);
+                Write(property.Variable.Declaration, propertyValue);
             }
             jsonWriter.WriteObjectEnd();
         }
 
-        void WritePod(const eti::Type& type, const void* value) noexcept
+        void WritePod(const eti::Declaration& declaration, const void* value) noexcept
         {
-            switch (type.Id)
+            switch (declaration.Type->Id)
             {
                 case GetTypeId<bool>():
                     jsonWriter.WriteBool(*(bool*)value);
@@ -108,10 +131,10 @@ namespace ejson
             }
         }
 
-        void WriteEnum(const eti::Type& type, const void* value) noexcept
+        void WriteEnum(const eti::Declaration& declaration, const void* value) noexcept
         {
             s64 enumValue = -1;
-            switch (type.Parent->Id)
+            switch (declaration.Type->Parent->Id)
             {
                 case GetTypeId<u8>():
                     enumValue = *(u8*)value;
@@ -143,9 +166,9 @@ namespace ejson
                     break;
             }
 
-            if ( enumValue >= 0 && enumValue < (s64)type.EnumSize)
+            if ( enumValue >= 0 && enumValue < (s64)declaration.Type->EnumSize)
             {
-                jsonWriter.WriteString(type.GetEnumValueName(enumValue));
+                jsonWriter.WriteString(declaration.Type->GetEnumValueName(enumValue));
             }
             else
             {
@@ -153,28 +176,28 @@ namespace ejson
             }
         }
 
-        void WriteTemplate(const eti::Type& type, const void* value) noexcept
+        void WriteTemplate(const eti::Declaration& declaration, const void* value) noexcept
         {
             // vector
-            if (type.Name.starts_with("std::vector"))
+            if (declaration.Type->Name.starts_with("std::vector"))
             {
                 jsonWriter.WriteArrayBegin();
                 size_t size;
-                type.GetMethod("GetSize")->UnSafeCall((void*)value, &size, {});
-                const Type& itemType = *type.Templates[0];
-                const Method* getAt = type.GetMethod("GetAt");
+                declaration.Type->GetMethod("GetSize")->UnSafeCall((void*)value, &size, {});
+                const Type& itemType = *declaration.Type->Templates[0].Type;
+                const Method* getAt = declaration.Type->GetMethod("GetAt");
                 for (size_t i = 0; i < size; ++i)
                 {
                     void* ptr = nullptr;
                     void* args[1] = { &i };
                     getAt->UnSafeCall((void*)value, &ptr, args );
-                    Write(*type.Templates[0], ptr);
+                    Write(declaration.Type->Templates[0], ptr);
                 }
                 jsonWriter.WriteArrayEnd();
             }
 
             // map
-            if (type.Name.starts_with("std::map"))
+            if (declaration.Type->Name.starts_with("std::map"))
             {
                 // todo
                 jsonWriter.WriteNull();
@@ -321,7 +344,7 @@ namespace ejson
 
             if (current->IsVector)
             {
-                switch (current->Declaration->Type->Templates[0]->Id)
+                switch (current->Declaration->Type->Templates[0].Type->Id)
                 {
                     case GetTypeId<s8>():
                         VectorAdd((s8)value);
@@ -404,8 +427,8 @@ namespace ejson
             void* Value = nullptr;
             const Declaration* Declaration = nullptr;
             bool IsVector = false;
-            const Type* T1 = nullptr;
-            const Type* T2 = nullptr;
+            const ::eti::Declaration* T1 = nullptr;
+            const ::eti::Declaration* T2 = nullptr;
             const Method* Add = nullptr;
             
         };
@@ -414,7 +437,7 @@ namespace ejson
         {
             if (declaration->Type->Name.starts_with("std::vector"))
             {
-                contexts.push_back({value, declaration, true, declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add")});
+                contexts.push_back({value, declaration, true, &declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add")});
                 current = &contexts[contexts.size() - 1];
             }
             else
@@ -434,7 +457,7 @@ namespace ejson
         void VectorAdd(const T& value)
         {
             EJSON_ASSERT(current->Add != nullptr, "not a vector");
-            EJSON_ASSERT(*current->Declaration->Type->Templates[0] == TypeOf<T>(), "not vaid vector type" );
+            EJSON_ASSERT(*current->Declaration->Type->Templates[0].Type == TypeOf<T>(), "not vaid vector type" );
             const T* ptr = &value;
             void* args[1] = { (void*) &ptr};
             current->Add->UnSafeCall(current->Value, NoReturn, args);
@@ -473,31 +496,53 @@ namespace ejson
         {
             JsonWriter jsonWriter(stringWriter);
             TypeWriter valueWriter(jsonWriter);
-            valueWriter.Write(TypeOf<T>(), &value);
+
+            Declaration declaration = {};
+            declaration.Type = &TypeOf<T>();
+            if constexpr (std::is_pointer_v<T>)
+            {
+                declaration.IsPtr = true;
+                valueWriter.Write(declaration, value);
+            }
+            else
+            {
+                valueWriter.Write(declaration, &value);
+            }
         }
         else
         {
             JsonWriter<StringWriter, true> jsonWriter(stringWriter);
             TypeWriter valueWriter(jsonWriter);
-            valueWriter.Write(TypeOf<T>(), &value);
+            
+            Declaration declaration = {};
+            declaration.Type = &TypeOf<T>();
+            if constexpr (std::is_pointer_v<T>)
+            {
+                declaration.IsPtr = true;
+                valueWriter.Write(declaration, value);
+            }
+            else
+            {
+                valueWriter.Write(declaration, &value);
+            }
         }
     }
 
-    template <typename T>
-    void Write(const T& value, output_stream& stream, bool prettify = false) noexcept
-    {
-        StreamWriter streamWriter(stream);
-        if (!prettify)
-        {
-            JsonWriter jsonWriter(streamWriter);
-            TypeWriter valueWriter(jsonWriter);
-            valueWriter.Write(value);
-        }
-        else
-        {
-            JsonWriter<StreamWriter, true> jsonWriter(streamWriter);
-            TypeWriter valueWriter(jsonWriter);
-            valueWriter.Write(value);
-        }
-    }
+    //template <typename T>
+    //void Write(const T& value, output_stream& stream, bool prettify = false) noexcept
+    //{
+    //    StreamWriter streamWriter(stream);
+    //    if (!prettify)
+    //    {
+    //        JsonWriter jsonWriter(streamWriter);
+    //        TypeWriter valueWriter(jsonWriter);
+    //        valueWriter.Write(value);
+    //    }
+    //    else
+    //    {
+    //        JsonWriter<StreamWriter, true> jsonWriter(streamWriter);
+    //        TypeWriter valueWriter(jsonWriter);
+    //        valueWriter.Write(value);
+    //    }
+    //}
 }

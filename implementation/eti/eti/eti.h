@@ -510,6 +510,9 @@ namespace eti
         template <typename T>
         static Declaration MakeDeclaration();
 
+        template <typename... ARGS>
+        static std::span<Declaration> MakeDeclarations();
+
         //
         // Variable
 
@@ -557,7 +560,7 @@ namespace eti
         static Type MakeType(::eti::Kind kind, const Type* parent, 
             std::span<const Property> properties = {}, 
             std::span<const Method> methods = {}, 
-            std::span<const Type*> templates = {}, 
+            std::span<Declaration> templates = {}, 
             std::vector<std::shared_ptr<Attribute>> attributes = {},
             std::string_view enumNames = {});
 
@@ -762,7 +765,7 @@ namespace eti
 
         std::span<const Property> Properties;
         std::span<const Method> Methods;
-        std::span<const Type*> Templates; // todo: implement!
+        std::span<Declaration> Templates; // todo: implement!
         std::vector<std::shared_ptr<Attribute>> Attributes;
         std::string_view EnumNames;
         size_t EnumSize = 0;
@@ -1110,7 +1113,7 @@ namespace eti
                     initializing = true; \
                     static std::vector<::eti::Property> properties = { PROPERTIES }; \
                     static std::vector<::eti::Method> methods =  { METHODS  }; \
-                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::GetTypes<T1>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::MakeDeclarations<T1>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
                 } \
                 return type; \
             } \
@@ -1133,7 +1136,7 @@ namespace eti
                     initializing = true; \
                     static std::vector<::eti::Property> properties = { PROPERTIES }; \
                     static std::vector<::eti::Method> methods =  { METHODS  }; \
-                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::GetTypes<T1,T2>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::MakeDeclarations<T1,T2>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
                 } \
                 return type; \
             } \
@@ -1163,6 +1166,13 @@ namespace eti
                 std::is_reference_v<T>,
                 std::is_pointer_v<T> ? utils::IsPtrConst<T> :  (std::is_reference_v<T> ? utils::IsRefConst<T> : std::is_const_v<T>)
             };
+        }
+
+        template <typename... ARGS>
+        static std::span<Declaration> MakeDeclarations()
+        {
+            static std::vector<Declaration> declarations = { MakeDeclaration<ARGS>()... };
+            return declarations;
         }
 
         //
@@ -1285,7 +1295,7 @@ namespace eti
         static Type MakeType(::eti::Kind kind, const Type* parent, 
             std::span<const Property> properties /*= {}*/, 
             std::span<const Method> methods /*= {}*/, 
-            std::span<const Type*> templates /*= {}*/, 
+            std::span<Declaration> templates /*= {}*/, 
             std::vector<std::shared_ptr<Attribute>> attributes /*= {}*/,
             std::string_view enumNames /*= {}*/)
         {
@@ -1358,13 +1368,6 @@ namespace eti
                     0
                 };
             }
-        }
-
-        template<typename... ARGS>
-        std::span<const Type*> GetTypes()
-        {
-            static const Type* types[] = { &TypeOfForward<ARGS>()... };
-            return std::span<const Type*>(types, sizeof...(ARGS));
         }
 
         template <typename... ARGS>
@@ -1659,6 +1662,7 @@ namespace eti
         if (ptr == nullptr)
             return;
         Destruct(ptr);
+        free(ptr);
     }
 
     template<typename FROM, typename TO>
