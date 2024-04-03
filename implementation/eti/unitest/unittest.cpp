@@ -8,14 +8,7 @@
 using namespace eti;
 using namespace ejson;
 
-namespace eti
-{
-    Repository& Repository::Instance()
-    {
-        static Repository repository;
-        return repository;
-    }
-}
+ETI_REPOSITORY_IMPL()
 
 namespace test
 {
@@ -82,23 +75,46 @@ namespace test
         Point* PointPtr = nullptr;
     };
 
-    class Animal
+    class Animal : public eti::Object
     {
-        ETI_BASE(Animal)
+        ETI_CLASS_EXT(Animal, eti::Object, ETI_PROPERTIES( ETI_PROPERTY(MaxSpeed) ), ETI_METHODS())
     public:
-        virtual ~Animal(){}
+        float MaxSpeed = 0.0f;
     };
 
     class Bird : public Animal
     {
-        ETI_CLASS_EXT(Bird, Animal, ETI_PROPERTIES(), ETI_METHODS())
+        ETI_CLASS_EXT(Bird, Animal, ETI_PROPERTIES(ETI_PROPERTY(Wingspan)), ETI_METHODS())
     public:
+        float Wingspan = 1.2f;
     };
 
     class Cat : public Animal
     {
-        ETI_CLASS_EXT(Cat, Animal, ETI_PROPERTIES(), ETI_METHODS())
+        ETI_CLASS_EXT(Cat, Animal, ETI_PROPERTIES(ETI_PROPERTY(TailsLength)), ETI_METHODS())
     public:
+        float TailsLength = 0.3f;
+    };
+
+    struct Zoo
+    {
+        ETI_STRUCT_EXT(Zoo, ETI_PROPERTIES( ETI_PROPERTY(Animals) ), ETI_METHODS())
+
+        std::vector<Animal*> Animals;
+
+        Zoo()
+        {
+            Animals.push_back(new Cat());
+            Animals.push_back(new Bird());
+            Animals.push_back(new Animal());
+        }
+
+        ~Zoo()
+        {
+            for (Animal* a : Animals)
+                delete(a);
+            Animals.clear();
+        }
     };
 
     void Register()
@@ -113,6 +129,7 @@ namespace test
             Repository::Instance().Register(TypeOf<Animal>());
             Repository::Instance().Register(TypeOf<Bird>());
             Repository::Instance().Register(TypeOf<Cat>());
+            Repository::Instance().Register(TypeOf<Zoo>());
             registered = true;
         }
     }
@@ -185,3 +202,73 @@ namespace test_02
     }
 }
 
+namespace test_03
+{
+    TEST_CASE("test_03")
+    {
+        test::Register();
+        {
+            Cat cat;
+            const Type& type = cat.GetType();
+            Animal* animal = &cat;
+            string json;
+            WriteType(animal, json);
+            REQUIRE(json == EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}"));
+        }
+
+        {
+            string json = EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}");
+            Animal* animal = nullptr;
+            ParserError error;
+            ReadType(json, animal, error);
+            REQUIRE(IsA<Cat>(*animal));
+        }
+    }
+}
+
+namespace test_04
+{
+    TEST_CASE("test_04")
+    {
+        {
+            Zoo zoo;
+            const Property* property = TypeOf<Zoo>().GetProperty("Animals");
+            const Method* getAt = property->Variable.Declaration.Type->GetMethod("GetAt");
+            int index = 0;
+            void** ptr = nullptr;
+            void* args[1] = { &index };
+            getAt->CallMethod(zoo.Animals, &ptr, (size_t)0);
+            REQUIRE(*ptr == zoo.Animals[0]);
+
+            void** ptrU = nullptr;
+            size_t indexU = 0;
+            void* argsU[1] = { &indexU };
+            getAt->UnSafeCall(&zoo.Animals, &ptrU, argsU);
+            REQUIRE(*ptrU == zoo.Animals[0]);
+        }
+
+        string ref = EJSON_TEXT("{\"Animals\":[{\"@type\":\"test::Cat\",\"TailsLength\":0.3},{\"@type\":\"test::Bird\",\"Wingspan\":1.2},{\"MaxSpeed\":0}]}");
+
+        test::Register();
+        {
+            Zoo zoo;
+            string json;
+            WriteType(zoo, json);
+            REQUIRE(json == ref);
+        }
+
+        {
+            Zoo zoo;
+            for (auto a : zoo.Animals)
+                delete (a);
+            zoo.Animals.clear();
+            ParserError error;
+            ReadType(ref, zoo, error);
+            // todo!
+            //REQUIRE(zoo.Animals.size() == 3);
+            //REQUIRE(IsA<Cat>(*zoo.Animals[0]));
+            //REQUIRE(IsA<Bird>(*zoo.Animals[1]));
+            //REQUIRE(IsA<Animal>(*zoo.Animals[2]));
+        }
+    }
+}

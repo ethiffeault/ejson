@@ -20,15 +20,10 @@ namespace ejson
         {
             if (declaration.IsPtr)
             {
-                const void** ptrValue = (const void**)value;
-                if (*ptrValue == nullptr)
+                if (value == nullptr)
                 {
                     jsonWriter.WriteNull();
                     return;
-                }
-                else
-                {
-                    value = *ptrValue;
                 }
             }
 
@@ -40,7 +35,7 @@ namespace ejson
                 jsonWriter.WriteNull();
                 break;
             case Kind::Class:
-                WriteStruct(declaration, value);
+                WriteClass(declaration, value);
                 break;
             case Kind::Struct:
                 WriteStruct(declaration, value);
@@ -67,19 +62,54 @@ namespace ejson
 
         void WriteStruct(const eti::Declaration& declaration, const void* value) noexcept
         {
-            if (declaration.IsPtr && value == nullptr)
-            {
-                jsonWriter.WriteNull();
-                return;
-            }
             EJSON_ASSERT(value != nullptr, "cannot be null if not ptr");
 
             jsonWriter.WriteObjectBegin();
+
             for (const Property& property : declaration.Type->Properties)
             {
                 jsonWriter.WriteProperty(property.Variable.Name);
                 void* propertyValue = property.UnSafeGetPtr(const_cast<void*>(value));
                 Write(property.Variable.Declaration, propertyValue);
+            }
+            jsonWriter.WriteObjectEnd();
+        }
+
+        void WriteClass(const eti::Declaration& declaration, const void* value) noexcept
+        {
+            EJSON_ASSERT(value != nullptr, "cannot be null if not ptr");
+
+            const Type* type = declaration.Type;
+            if (declaration.IsPtr)
+            {
+                if (IsA(*type, TypeOf<eti::Object>()))
+                {
+                    eti::Object* object = (eti::Object*)value;
+                    type = &object->GetType();
+                }
+            }
+
+            jsonWriter.WriteObjectBegin();
+
+            if (*type != *declaration.Type)
+            {
+                jsonWriter.WriteProperty(EJSON_TEXT("@type"));
+                jsonWriter.WriteString(ToWString(type->Name));
+            }
+
+            for (const Property& property : type->Properties)
+            {
+                jsonWriter.WriteProperty(property.Variable.Name);
+                if (property.Variable.Declaration.IsPtr)
+                {
+                    void** propertyValue = (void**)property.UnSafeGetPtr(const_cast<void*>(value));
+                    Write(property.Variable.Declaration, *propertyValue);
+                }
+                else
+                {
+                    void* propertyValue = property.UnSafeGetPtr(const_cast<void*>(value));
+                    Write(property.Variable.Declaration, propertyValue);
+                }
             }
             jsonWriter.WriteObjectEnd();
         }
@@ -188,10 +218,21 @@ namespace ejson
                 const Method* getAt = declaration.Type->GetMethod("GetAt");
                 for (size_t i = 0; i < size; ++i)
                 {
-                    void* ptr = nullptr;
-                    void* args[1] = { &i };
-                    getAt->UnSafeCall((void*)value, &ptr, args );
-                    Write(declaration.Type->Templates[0], ptr);
+                    if (declaration.Type->Templates[0].IsPtr)
+                    {
+                        void** ptr = nullptr;
+                        void* args[1] = { &i };
+                        getAt->UnSafeCall((void*)value, &ptr, args);
+                        Write(declaration.Type->Templates[0], *ptr);
+                    }
+                    else
+                    {
+                        void* ptr = nullptr;
+                        void* args[1] = { &i };
+                        getAt->UnSafeCall((void*)value, &ptr, args);
+                        Write(declaration.Type->Templates[0], ptr);
+
+                    }
                 }
                 jsonWriter.WriteArrayEnd();
             }
@@ -238,8 +279,6 @@ namespace ejson
 
         void ObjectEnd() noexcept
         {
-            if (!current->Value)
-                return;
         }
 
         void PropertyBegin(const string_view& key) noexcept
@@ -285,8 +324,6 @@ namespace ejson
 
         void ArrayEnd() noexcept
         {
-            if (!current->Value)
-                return;
         }
 
         void ValueBool(bool b) noexcept
@@ -466,7 +503,7 @@ namespace ejson
         };
 
         bool pendingType = false;
-        string_view pendingKey = {};
+        string pendingKey = {};
 
         void HandlePendingType(string_view typeName = {})
         {
@@ -476,16 +513,18 @@ namespace ejson
                 {
                     if (current->Declaration != nullptr)
                     {
-                        
-                        if ( pendingKey == EJSON_TEXT("@type"))
+                        if (pendingKey == EJSON_TEXT("@type"))
                         {
-                            // todo: try to create from typeName ( must derive from current->Declaration->Type )
-                            current->Value = current->Declaration->Type->UnSafeNew();
+                            const Type* type = eti::Repository::Instance().GetType(ToString(typeName));
+                            if (type != nullptr)
+                            {
+                                if (IsA(*type, *current->Declaration->Type))
+                                    current->Value = type->UnSafeNew();
+                            }
                         }
-                        else
-                        {
+
+                        if (current->Value == nullptr)
                             current->Value = current->Declaration->Type->UnSafeNew();
-                        }
                     }
                 }
 
@@ -510,7 +549,7 @@ namespace ejson
 
         void PushContext(void* value, const Declaration* declaration)
         {
-            if (declaration->Type->Name.starts_with("std::vector"))
+            if (declaration && declaration->Type->Name.starts_with("std::vector"))
             {
                 contexts.push_back({ value, declaration, true, &declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add") });
                 current = &contexts[contexts.size() - 1];

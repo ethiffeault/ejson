@@ -86,14 +86,6 @@
     #endif
 
     #ifndef ETI_REPOSITORY
-        // Enable Repository
-        //
-        //  All type will self register so it's possible to make at runtime:
-        //      const Type* type = Repository::GetTypes(fooId);
-        //      const Type* type = Repository::GetTypes("Foo");
-        //
-        // For stuff like serialization...
-        //
         // need a #define in one cpp file to work: ETI_REPOSITORY_IMPL()
         #define ETI_REPOSITORY 1
 
@@ -564,10 +556,6 @@ namespace eti
             std::vector<std::shared_ptr<Attribute>> attributes = {},
             std::string_view enumNames = {});
 
-        template<typename... ARGS>
-        std::span<const Type*> GetTypes();
-
-
         template <typename... ARGS>
         std::vector<void*> GetVoidPtrFromArgs(const ARGS&... args);
 
@@ -874,7 +862,23 @@ namespace eti
         std::map<TypeId, const Type*> idToTypes;
         std::map<std::string_view, const Type*> namesToTypes;
     };
-    #endif // #if ETI_REPOSITORY
+
+#define ETI_REPOSITORY_IMPL() \
+    namespace eti \
+    { \
+        Repository& Repository::Instance() \
+        { \
+            static Repository repository; \
+            return repository; \
+        } \
+    } 
+
+#else
+
+#define ETI_REPOSITORY_IMPL()
+
+#endif // #if ETI_REPOSITORY
+
 
 
 #pragma endregion
@@ -960,7 +964,7 @@ namespace eti
 
 #define ETI_BASE_EXT(BASE, PROPERTIES, METHODS, ...) \
     public: \
-        virtual const ::eti::Type& GetTypes() const { return GetTypeStatic(); } \
+        virtual const ::eti::Type& GetType() const { return GetTypeStatic(); } \
         ETI_INTERNAL_TYPE_DECL(BASE, nullptr, ::eti::Kind::Class, __VA_ARGS__) \
         ETI_INTERNAL_PROPERTY(PROPERTIES) \
         ETI_INTERNAL_METHOD(METHODS) \
@@ -972,7 +976,7 @@ namespace eti
 #define ETI_CLASS_EXT(CLASS, BASE, PROPERTIES, METHODS, ...) \
     public: \
         using Super = BASE; \
-        const ::eti::Type& GetTypes() const override { return GetTypeStatic(); }\
+        const ::eti::Type& GetType() const override { return GetTypeStatic(); }\
         ETI_INTERNAL_TYPE_DECL(CLASS, &::eti::TypeOf<BASE>(), ::eti::Kind::Class, __VA_ARGS__) \
         ETI_INTERNAL_PROPERTY(PROPERTIES) \
         ETI_INTERNAL_METHOD(METHODS) \
@@ -1809,7 +1813,7 @@ namespace eti
     {
         static_assert(utils::IsCompleteType<BASE>, "Base type must be completely declared, missing include ?");
         static_assert(utils::IsCompleteType<T>, "Type must be completely declared, missing include ?");
-        return IsA( instance.GetTypes(), TypeOf<BASE>());
+        return IsA( instance.GetType(), TypeOf<BASE>());
     }
 
     template<typename T, typename BASE>
@@ -1924,12 +1928,15 @@ ETI_POD_EXT(std::uint64_t, u64);
 ETI_POD_EXT(std::float_t, f32);
 ETI_POD_EXT(std::double_t, f64);
 
-class Object
+namespace eti
 {
-    ETI_BASE(Object)
-public:
-    virtual ~Object(){}
-};
+    class Object
+    {
+        ETI_BASE(Object)
+    public:
+        virtual ~Object() {}
+    };
+}
 
 namespace eti::utils
 {
