@@ -8,6 +8,15 @@
 using namespace eti;
 using namespace ejson;
 
+namespace eti
+{
+    Repository& Repository::Instance()
+    {
+        static Repository repository;
+        return repository;
+    }
+}
+
 namespace test
 {
     ETI_ENUM
@@ -22,30 +31,6 @@ namespace test
         Sunday
     )
 
-    struct Point
-    {
-        ETI_STRUCT_EXT
-        (
-            Point,
-            ETI_PROPERTIES
-            (
-                ETI_PROPERTY(X),
-                ETI_PROPERTY(Y)
-            ),
-            ETI_METHODS()
-        )
-
-        float X = 0.0f;
-        float Y = 0.0f;
-    };
-
-}
-ETI_ENUM_IMPL(test::Day);
-
-using namespace test;
-
-namespace test_01
-{
     struct Point
     {
         ETI_STRUCT_EXT
@@ -82,8 +67,66 @@ namespace test_01
         Point Point;
     };
 
+    class Doo : public Object
+    {
+        ETI_CLASS_EXT
+        (
+            Doo, Object,
+            ETI_PROPERTIES
+            (
+                ETI_PROPERTY(PointPtr)
+            ),
+            ETI_METHODS()
+        )
+    public:
+        Point* PointPtr = nullptr;
+    };
+
+    class Animal
+    {
+        ETI_BASE(Animal)
+    public:
+        virtual ~Animal(){}
+    };
+
+    class Bird : public Animal
+    {
+        ETI_CLASS_EXT(Bird, Animal, ETI_PROPERTIES(), ETI_METHODS())
+    public:
+    };
+
+    class Cat : public Animal
+    {
+        ETI_CLASS_EXT(Cat, Animal, ETI_PROPERTIES(), ETI_METHODS())
+    public:
+    };
+
+    void Register()
+    {
+        static bool registered = false;
+        if (!registered)
+        {
+            Repository::Instance().Register(TypeOf<Day>());
+            Repository::Instance().Register(TypeOf<Point>());
+            Repository::Instance().Register(TypeOf<Foo>());
+            Repository::Instance().Register(TypeOf<Doo>());
+            Repository::Instance().Register(TypeOf<Animal>());
+            Repository::Instance().Register(TypeOf<Bird>());
+            Repository::Instance().Register(TypeOf<Cat>());
+            registered = true;
+        }
+    }
+}
+ETI_ENUM_IMPL(test::Day);
+
+using namespace test;
+
+namespace test_01
+{
     TEST_CASE("test_01")
     {
+        test::Register();
+
         Point p;
         string json;
         WriteType(p, json);
@@ -110,41 +153,28 @@ namespace test_01
 
 namespace test_02
 {
-    class Foo : public Object
-    {
-        ETI_CLASS_EXT
-        (
-            Foo, Object,
-            ETI_PROPERTIES
-            (
-                ETI_PROPERTY(PointPtr)
-            ),
-            ETI_METHODS()
-        )
-    public:
-        Point* PointPtr = nullptr;
-    };
-
     TEST_CASE("test_02")
     {
+        test::Register();
         {
             string json;
-            Foo foo;
+            Doo foo;
             WriteType(foo, json);
             REQUIRE(json == EJSON_TEXT("{\"PointPtr\":null}"));
         }
 
         {
-            //string json = EJSON_TEXT("{\"PointPtr\":null}");
-            //ParserError error;
-            //Foo* foo = nullptr;
-            //ReadType(json, foo, error);
-            //REQUIRE(foo != nullptr);
+            string json = EJSON_TEXT("{\"PointPtr\":null}");
+            ParserError error;
+            Doo* foo = nullptr;
+            ReadType(json, foo, error);
+            REQUIRE(foo != nullptr);
+            REQUIRE(foo->PointPtr == nullptr);
         }
 
         {
             string json;
-            Foo foo;
+            Doo foo;
             foo.PointPtr = new Point();
             WriteType(foo, json);
             REQUIRE(json == EJSON_TEXT("{\"PointPtr\":{\"X\":0,\"Y\":0}}"));

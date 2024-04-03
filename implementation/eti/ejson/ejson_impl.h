@@ -216,11 +216,24 @@ namespace ejson
             PushContext(root, &rootDeclaration);
         }
 
+        void* TryGetRootValue() const
+        {
+            if(current != nullptr && contexts.size() == 1)
+                return current->Value;
+            return nullptr;
+        }
+
+        ~TypeReader()
+        {
+            PopContext();
+        }
+
         void ObjectBegin() noexcept
         {
+            HandlePendingType();
+
             if (!current->Value)
                 return;
-
         }
 
         void ObjectEnd() noexcept
@@ -231,17 +244,27 @@ namespace ejson
 
         void PropertyBegin(const string_view& key) noexcept
         {
-            if (current->Value)
+            EJSON_ASSERT(pendingType == false, "invalid pending status");
+
+            if (current->Value == nullptr && current->Declaration != nullptr)
             {
-                const Property* property = current->Declaration->Type->GetProperty(ToString(key));
-                if (property)
+                pendingKey = key;
+                pendingType = true;
+                return;
+            }
+            else
+            {
+                if (current->Value != nullptr)
                 {
-                    void* propertyPtr = ((u8*)current->Value) + property->Offset;
-                    PushContext(propertyPtr, &property->Variable.Declaration);
-                    return;
+                    const Property* property = current->Declaration->Type->GetProperty(ToString(key));
+                    if (property)
+                    {
+                        void* propertyPtr = ((u8*)current->Value) + property->Offset;
+                        PushContext(propertyPtr, &property->Variable.Declaration);
+                        return;
+                    }
                 }
             }
-
             PushContext(nullptr, nullptr);
         }
 
@@ -252,6 +275,8 @@ namespace ejson
 
         void ArrayBegin() noexcept
         {
+            HandlePendingType();
+
             if (!current->Value)
                 return;
             if (current->IsVector)
@@ -266,6 +291,8 @@ namespace ejson
 
         void ValueBool(bool b) noexcept
         {
+            HandlePendingType();
+
             if (!current->Value)
                 return;
 
@@ -277,6 +304,8 @@ namespace ejson
 
         void ValueNull() noexcept
         {
+            HandlePendingType();
+
             if (!current->Value)
                 return;
 
@@ -288,6 +317,8 @@ namespace ejson
 
         void ValueString(const string_view& str) noexcept
         {
+            HandlePendingType(str);
+
             if (!current->Value)
                 return;
 
@@ -339,6 +370,8 @@ namespace ejson
 
         void ValueNumber(number value) noexcept
         {
+            HandlePendingType();
+
             if (!current->Value)
                 return;
 
@@ -430,14 +463,56 @@ namespace ejson
             const ::eti::Declaration* T1 = nullptr;
             const ::eti::Declaration* T2 = nullptr;
             const Method* Add = nullptr;
-            
         };
+
+        bool pendingType = false;
+        string_view pendingKey = {};
+
+        void HandlePendingType(string_view typeName = {})
+        {
+            if (pendingType)
+            {
+                if (current->Value == nullptr)
+                {
+                    if (current->Declaration != nullptr)
+                    {
+                        
+                        if ( pendingKey == EJSON_TEXT("@type"))
+                        {
+                            // todo: try to create from typeName ( must derive from current->Declaration->Type )
+                            current->Value = current->Declaration->Type->UnSafeNew();
+                        }
+                        else
+                        {
+                            current->Value = current->Declaration->Type->UnSafeNew();
+                        }
+                    }
+                }
+
+                if (current->Value)
+                {
+                    const Property* property = current->Declaration->Type->GetProperty(ToString(pendingKey));
+                    if (property)
+                    {
+                        void* propertyPtr = ((u8*)current->Value) + property->Offset;
+                        pendingKey = {};
+                        PushContext(propertyPtr, &property->Variable.Declaration);
+                        return;
+                    }
+                }
+
+                pendingKey = {};
+                PushContext(nullptr, nullptr);
+            }
+            pendingType = false;
+
+        }
 
         void PushContext(void* value, const Declaration* declaration)
         {
             if (declaration->Type->Name.starts_with("std::vector"))
             {
-                contexts.push_back({value, declaration, true, &declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add")});
+                contexts.push_back({ value, declaration, true, &declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add") });
                 current = &contexts[contexts.size() - 1];
             }
             else
@@ -473,10 +548,20 @@ namespace ejson
     bool ReadType(string_view json, T& value, ParserError& error) noexcept
     {
         StringReader stringReader(json);
-        TypeReader valueReader(&value, &TypeOf<T>());
-        JsonReader jsonReader(valueReader, stringReader);
+
+        void* ptr = nullptr;
+
+        if constexpr ( std::is_pointer_v<T> )
+            ptr = value;
+        else
+            ptr = &value;
+
+        TypeReader typeReader(ptr, &TypeOf<T>());
+        JsonReader jsonReader(typeReader, stringReader);
         if (jsonReader.Parse())
         {
+            if constexpr ( std::is_pointer_v<T> )
+                value = (T)typeReader.TryGetRootValue();
             return true;
         }
         else

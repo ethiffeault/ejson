@@ -786,6 +786,9 @@ namespace eti
         template<typename T>
         T* New() const;
 
+        void* UnSafeNew() const;
+
+
         template<typename T>
         T* NewCopy(const T& other) const;
 
@@ -832,6 +835,47 @@ namespace eti
 
     template<typename BASE, typename T>
     const BASE* Cast(const T* instance);
+
+    #if ETI_REPOSITORY
+    class Repository
+    {
+
+    public:
+
+        static Repository& Instance();
+
+        void Register(const Type& type)
+        {
+            ETI_ASSERT(idToTypes.find(type.Id) == idToTypes.end(), "Type already registered to duplicate TypeId");
+            ETI_ASSERT(namesToTypes.find(type.Name) == namesToTypes.end(), "Type already registered to duplicate TypeId");
+
+            idToTypes[type.Id] = &type;
+            namesToTypes[type.Name] = &type;
+        }
+
+        const Type* GetType(TypeId id) const
+        {
+            auto it = idToTypes.find(id);
+            if (it != idToTypes.end())
+                return it->second;
+            return nullptr;
+        }
+
+        const Type* GetType(std::string_view name) const
+        {
+            auto it = namesToTypes.find(name);
+            if (it != namesToTypes.end())
+                return it->second;
+            return nullptr;
+        }
+
+    private:
+
+        std::map<TypeId, const Type*> idToTypes;
+        std::map<std::string_view, const Type*> namesToTypes;
+    };
+    #endif // #if ETI_REPOSITORY
+
 
 #pragma endregion
 
@@ -1636,6 +1680,15 @@ namespace eti
         ETI_ASSERT(memory, "out of memory on Type::New call");
         Construct(memory);
         return static_cast<T*>(memory);
+    }
+
+    inline void* Type::UnSafeNew() const
+    {
+        ETI_ASSERT(HaveConstruct(), "try to call Type::New on Type without Construct");
+        void* memory = _aligned_malloc(Size, Align);
+        ETI_ASSERT(memory, "out of memory on Type::New call");
+        Construct(memory);
+        return (memory);
     }
 
     template<typename T>
