@@ -1650,25 +1650,41 @@ namespace eti
     inline const Property* Type::GetProperty(std::string_view name) const
     {
         auto it = std::ranges::find_if(Properties, [name](const Property& it) { return it.Variable.Name == name; });
-        return (it != Properties.end()) ? &(*it) : nullptr;
+        if (it != Properties.end())
+            return &*it;
+        if (Parent != nullptr)
+            return Parent->GetProperty(name);
+        return nullptr;
     }
 
     inline const Property* Type::GetProperty(TypeId propertyId) const
     {
         auto it = std::ranges::find_if(Properties, [propertyId](const Property& it) { return it.PropertyId == propertyId; });
-        return (it != Properties.end()) ? &(*it) : nullptr;
+        if (it != Properties.end())
+            return &*it;
+        if (Parent != nullptr)
+            return Parent->GetProperty(propertyId);
+        return nullptr;
     }
 
     inline const Method* Type::GetMethod(std::string_view name) const
     {
         auto it = std::ranges::find_if(Methods, [name](const Method& it) { return it.Name == name; });
-        return (it != Methods.end()) ? &(*it) : nullptr;
+        if (it != Methods.end())
+            return &*it;
+        if (Parent != nullptr)
+            return Parent->GetMethod(name);
+        return nullptr;
     }
 
     inline const Method* Type::GetMethod(TypeId methodId) const
     {
         auto it = std::ranges::find_if(Methods, [methodId](const Method& it) { return it.MethodId == methodId; });
-        return (it != Methods.end()) ? &(*it) : nullptr;
+        if (it != Methods.end())
+            return &*it;
+        if (Parent != nullptr)
+            return Parent->GetMethod(methodId);
+        return nullptr;
     }
 
     template<typename T>
