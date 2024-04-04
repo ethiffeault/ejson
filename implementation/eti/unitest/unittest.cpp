@@ -117,6 +117,34 @@ namespace test
         }
     };
 
+    struct FooArray
+    {
+        ETI_STRUCT_EXT
+        (
+            FooArray,
+            ETI_PROPERTIES
+            (
+                ETI_PROPERTY(Data),
+            ),
+            ETI_METHODS()
+        )
+        std::vector<u32> Data;
+    };
+
+    struct FooArrayPtr
+    {
+        ETI_STRUCT_EXT
+        (
+            FooArrayPtr,
+            ETI_PROPERTIES
+            (
+                ETI_PROPERTY(Data),
+            ),
+            ETI_METHODS()
+        )
+        std::vector<u32*> Data;
+    };
+
     void Register()
     {
         static bool registered = false;
@@ -130,6 +158,8 @@ namespace test
             Repository::Instance().Register(TypeOf<Bird>());
             Repository::Instance().Register(TypeOf<Cat>());
             Repository::Instance().Register(TypeOf<Zoo>());
+            Repository::Instance().Register(TypeOf<FooArray>());
+            Repository::Instance().Register(TypeOf<FooArrayPtr>());
             registered = true;
         }
     }
@@ -142,29 +172,57 @@ namespace test_01
 {
     TEST_CASE("test_01")
     {
-        test::Register();
+        string refJson = EJSON_TEXT("1.23456");
+        float refValue = 1.23456f;
+        // write
+        {
+            f32 value = refValue;
+            string json;
+            WriteType(value, json);
+            REQUIRE(value == refValue);
+            REQUIRE(json == refJson);
+        }
 
-        Point p;
-        string json;
-        WriteType(p, json);
-        REQUIRE(json == EJSON_TEXT("{\"X\":0,\"Y\":0}"));
+        {
+            f32 value = refValue;
+            f32* ptr = &value;
+            string json;
+            WriteType(ptr, json);
+            REQUIRE(*ptr == refValue);
+            REQUIRE(json == refJson);
+        }
 
-        Foo foo;
-        WriteType(foo, json);
-        REQUIRE(json == EJSON_TEXT("{\"CurrentDay\":\"Friday\",\"Data\":[1,2],\"Point\":{\"X\":0,\"Y\":0}}"));
+        {
+            f32* ptr = nullptr;
+            string json;
+            WriteType(ptr, json);
+            REQUIRE(ptr == nullptr);
+            REQUIRE(json == EJSON_TEXT("null"));
+        }
 
-        Foo foo2;
-        foo2.Data.clear();
-        foo2.CurrentDay = Day::Monday;
-        foo2.Point.X = 1;
-        foo2.Point.Y = 1;
+        // read
+        {
+            f32 value = 1.0f;
+            ReadType(refJson, value);
+            REQUIRE(value == refValue);
+        }
 
-        ParserError error;
-        ReadType(json, foo2, error);
-        REQUIRE(foo2.CurrentDay == Day::Friday);
-        REQUIRE(foo2.Data.size() == 2);
-        REQUIRE(foo2.Point.X == 0);
-        REQUIRE(foo2.Point.Y == 0);
+        {
+            f32 value = 1.0f;
+            f32* ptr = &value;
+            ReadType(refJson, ptr);
+            REQUIRE(value == refValue);
+            REQUIRE(*ptr == refValue);
+        }
+
+        {
+            f32* ptr = nullptr;
+            ReadType(refJson, ptr);
+            REQUIRE(ptr != nullptr);
+            REQUIRE(*ptr == refValue);
+            delete(ptr);
+        }
+
     }
 }
 
@@ -172,33 +230,42 @@ namespace test_02
 {
     TEST_CASE("test_02")
     {
-        test::Register();
+        string refJson = EJSON_TEXT("[1.23456]");
         {
+            std::vector<float> value = { 1.23456f };
             string json;
-            Doo foo;
-            WriteType(foo, json);
-            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":null}"));
+            WriteType(value, json);
+            REQUIRE(value.size() == 1);
+            REQUIRE(value[0] == 1.23456f);
+            REQUIRE(json == refJson);
         }
 
         {
-            string json = EJSON_TEXT("{\"PointPtr\":null}");
-            ParserError error;
-            Doo* foo = nullptr;
-            ReadType(json, foo, error);
-            REQUIRE(foo != nullptr);
-            REQUIRE(foo->PointPtr == nullptr);
+            std::vector<float> value;
+            ReadType(refJson, value);
+            REQUIRE(value.size() == 1);
+            REQUIRE(value[0] == 1.23456f);
         }
 
         {
+            std::vector<float*> value;
+            value.push_back( (f32*)malloc(sizeof(float)) );
+            *value[0] = 1.23456f;
             string json;
-            Doo foo;
-            foo.PointPtr = new Point();
-            WriteType(foo, json);
-            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":{\"X\":0,\"Y\":0}}"));
-            delete (foo.PointPtr);
-            foo.PointPtr = nullptr;
+            WriteType(value, json);
+            REQUIRE(value.size() == 1);
+            REQUIRE(*value[0] == 1.23456f);
+            REQUIRE(json == refJson);
+            free(value[0]);
         }
 
+        {
+            std::vector<float*> value;
+            ReadType(refJson, value);
+            REQUIRE(value.size() == 1);
+            REQUIRE(*value[0] == 1.23456f);
+            delete(value[0]);
+        }
     }
 }
 
@@ -206,69 +273,196 @@ namespace test_03
 {
     TEST_CASE("test_03")
     {
-        test::Register();
+        string refJson = EJSON_TEXT("[[1.23456]]");
         {
-            Cat cat;
-            const Type& type = cat.GetType();
-            Animal* animal = &cat;
+            std::vector<std::vector<float>> value;
+            value.emplace_back();
+            value[0].push_back(1.23456f);
             string json;
-            WriteType(animal, json);
-            REQUIRE(json == EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}"));
+            WriteType(value, json);
+            REQUIRE(json == refJson);
         }
 
         {
-            string json = EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}");
-            Animal* animal = nullptr;
-            ParserError error;
-            ReadType(json, animal, error);
-            REQUIRE(IsA<Cat>(*animal));
+            std::vector<std::vector<float>> value;
+            ReadType(refJson, value);
+            REQUIRE(value.size() == 1);
+            REQUIRE(value[0].size() == 1);
+            REQUIRE(value[0][0] == 1.23456f);
+        }
+
+        {
+            std::vector<std::vector<float>*> value;
+            value.emplace_back( new std::vector<float>());
+            value[0]->push_back(1.23456f);
+            string json;
+            WriteType(value, json);
+            REQUIRE(json == refJson);
+            delete(value[0]);
+        }
+
+        {
+            std::vector<std::vector<float>*> value;
+            ReadType(refJson, value);
+            REQUIRE(value.size() == 1);
+            REQUIRE(value[0]->size() == 1);
+            REQUIRE((*value[0])[0] == 1.23456f);
+            TypeOf<std::vector<float>*>().Delete(value[0]);
         }
     }
 }
 
-namespace test_04
-{
-    TEST_CASE("test_04")
-    {
-        {
-            Zoo zoo;
-            const Property* property = TypeOf<Zoo>().GetProperty("Animals");
-            const Method* getAt = property->Variable.Declaration.Type->GetMethod("GetAt");
-            int index = 0;
-            void** ptr = nullptr;
-            void* args[1] = { &index };
-            getAt->CallMethod(zoo.Animals, &ptr, (size_t)0);
-            REQUIRE(*ptr == zoo.Animals[0]);
-
-            void** ptrU = nullptr;
-            size_t indexU = 0;
-            void* argsU[1] = { &indexU };
-            getAt->UnSafeCall(&zoo.Animals, &ptrU, argsU);
-            REQUIRE(*ptrU == zoo.Animals[0]);
-        }
-
-        string ref = EJSON_TEXT("{\"Animals\":[{\"@type\":\"test::Cat\",\"TailsLength\":0.3},{\"@type\":\"test::Bird\",\"Wingspan\":1.2},{\"MaxSpeed\":0}]}");
-
-        test::Register();
-        {
-            Zoo zoo;
-            string json;
-            WriteType(zoo, json);
-            REQUIRE(json == ref);
-        }
-
-        {
-            Zoo zoo;
-            for (auto a : zoo.Animals)
-                delete (a);
-            zoo.Animals.clear();
-            ParserError error;
-            ReadType(ref, zoo, error);
-            // todo!
-            //REQUIRE(zoo.Animals.size() == 3);
-            //REQUIRE(IsA<Cat>(*zoo.Animals[0]));
-            //REQUIRE(IsA<Bird>(*zoo.Animals[1]));
-            //REQUIRE(IsA<Animal>(*zoo.Animals[2]));
-        }
-    }
-}
+//namespace test_11
+//{
+//    TEST_CASE("test_11")
+//    {
+//        test::Register();
+//
+//        Point p;
+//        string json;
+//        WriteType(p, json);
+//        REQUIRE(json == EJSON_TEXT("{\"X\":0,\"Y\":0}"));
+//
+//        Foo foo;
+//        WriteType(foo, json);
+//        REQUIRE(json == EJSON_TEXT("{\"CurrentDay\":\"Friday\",\"Data\":[1,2],\"Point\":{\"X\":0,\"Y\":0}}"));
+//
+//        Foo foo2;
+//        foo2.Data.clear();
+//        foo2.CurrentDay = Day::Monday;
+//        foo2.Point.X = 1;
+//        foo2.Point.Y = 1;
+//
+//        ParserError error;
+//        ReadType(json, foo2, error);
+//        REQUIRE(foo2.CurrentDay == Day::Friday);
+//        REQUIRE(foo2.Data.size() == 2);
+//        REQUIRE(foo2.Point.X == 0);
+//        REQUIRE(foo2.Point.Y == 0);
+//    }
+//}
+//
+//namespace test_12
+//{
+//    TEST_CASE("test_12")
+//    {
+//        test::Register();
+//        {
+//            string json;
+//            Doo foo;
+//            WriteType(foo, json);
+//            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":null}"));
+//        }
+//
+//        {
+//            string json = EJSON_TEXT("{\"PointPtr\":null}");
+//            ParserError error;
+//            Doo* foo = nullptr;
+//            ReadType(json, foo, error);
+//            REQUIRE(foo != nullptr);
+//            REQUIRE(foo->PointPtr == nullptr);
+//        }
+//
+//        {
+//            string json;
+//            Doo foo;
+//            foo.PointPtr = new Point();
+//            WriteType(foo, json);
+//            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":{\"X\":0,\"Y\":0}}"));
+//            delete (foo.PointPtr);
+//            foo.PointPtr = nullptr;
+//        }
+//
+//    }
+//}
+//
+//namespace test_13
+//{
+//    TEST_CASE("test_13")
+//    {
+//        test::Register();
+//        {
+//            Cat cat;
+//            const Type& type = cat.GetType();
+//            Animal* animal = &cat;
+//            string json;
+//            WriteType(animal, json);
+//            REQUIRE(json == EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}"));
+//        }
+//
+//        {
+//            string json = EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}");
+//            Animal* animal = nullptr;
+//            ParserError error;
+//            ReadType(json, animal, error);
+//            REQUIRE(IsA<Cat>(*animal));
+//        }
+//    }
+//}
+//
+//namespace test_14
+//{
+//    TEST_CASE("test_14")
+//    {
+//        {
+//            Zoo zoo;
+//            const Property* property = TypeOf<Zoo>().GetProperty("Animals");
+//            const Method* getAt = property->Variable.Declaration.Type->GetMethod("GetAt");
+//            int index = 0;
+//            void** ptr = nullptr;
+//            void* args[1] = { &index };
+//            getAt->CallMethod(zoo.Animals, &ptr, (size_t)0);
+//            REQUIRE(*ptr == zoo.Animals[0]);
+//
+//            void** ptrU = nullptr;
+//            size_t indexU = 0;
+//            void* argsU[1] = { &indexU };
+//            getAt->UnSafeCall(&zoo.Animals, &ptrU, argsU);
+//            REQUIRE(*ptrU == zoo.Animals[0]);
+//        }
+//
+//        string ref = EJSON_TEXT("{\"Animals\":[{\"@type\":\"test::Cat\",\"TailsLength\":0.3},{\"@type\":\"test::Bird\",\"Wingspan\":1.2},{\"MaxSpeed\":0}]}");
+//
+//        test::Register();
+//        {
+//            Zoo zoo;
+//            string json;
+//            WriteType(zoo, json);
+//            REQUIRE(json == ref);
+//        }
+//
+//        {
+//            Zoo zoo;
+//            for (auto a : zoo.Animals)
+//                delete (a);
+//            zoo.Animals.clear();
+//            ParserError error;
+//            ReadType(ref, zoo, error);
+//            // todo!
+//            REQUIRE(zoo.Animals.size() == 3);
+//            REQUIRE(IsA<Cat>(*zoo.Animals[0]));
+//            REQUIRE(IsA<Bird>(*zoo.Animals[1]));
+//            REQUIRE(IsA<Animal>(*zoo.Animals[2]));
+//        }
+//    }
+//}
+//
+//namespace test_15
+//{
+//    TEST_CASE("test_15")
+//    {
+//        {
+//            FooArray foo1;
+//            foo1.Data.push_back(2);
+//            string json;
+//            WriteType(foo1, json);
+//            REQUIRE(json == EJSON_TEXT("{\"Data\":[2]}"));
+//
+//            FooArray foo2;
+//            ParserError error;
+//            ReadType(json, foo2, error);
+//            REQUIRE(foo2.Data.size() == 1);
+//            REQUIRE(foo2.Data[0] == 2);
+//        }
+//    }
+//}

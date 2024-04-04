@@ -251,10 +251,9 @@ namespace ejson
 
     struct TypeReader
     {
-        TypeReader(void* root, const Type* type) noexcept
+        TypeReader(void* root, const Declaration& declaration) noexcept
         {
-            rootDeclaration = { type, true };
-            PushContext(root, &rootDeclaration);
+            PushContext(root, declaration);
         }
 
         void* TryGetRootValue() const
@@ -271,10 +270,6 @@ namespace ejson
 
         void ObjectBegin() noexcept
         {
-            HandlePendingType();
-
-            if (!current->Value)
-                return;
         }
 
         void ObjectEnd() noexcept
@@ -285,7 +280,7 @@ namespace ejson
         {
             EJSON_ASSERT(pendingType == false, "invalid pending status");
 
-            if (current->Value == nullptr && current->Declaration != nullptr)
+            if (current->Value == nullptr)
             {
                 pendingKey = key;
                 pendingType = true;
@@ -295,16 +290,16 @@ namespace ejson
             {
                 if (current->Value != nullptr)
                 {
-                    const Property* property = current->Declaration->Type->GetProperty(ToString(key));
+                    const Property* property = current->Declaration.Type->GetProperty(ToString(key));
                     if (property)
                     {
                         void* propertyPtr = ((u8*)current->Value) + property->Offset;
-                        PushContext(propertyPtr, &property->Variable.Declaration);
+                        PushContext(propertyPtr, property->Variable.Declaration);
                         return;
                     }
                 }
             }
-            PushContext(nullptr, nullptr);
+            PushInvalid();
         }
 
         void PropertyEnd() noexcept
@@ -314,26 +309,75 @@ namespace ejson
 
         void ArrayBegin() noexcept
         {
-            HandlePendingType();
+            if (ValueBegin())
+            {
+                EJSON_ASSERT(current->Type == ContextType::Vector, "should be vector");
 
-            if (!current->Value)
-                return;
-            if (current->IsVector)
-                current->Declaration->Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});
+                if (current->Value == nullptr)
+                {
+                    // inside vector or map
+                    EJSON_ASSERT(contexts.size() > 1, "internal error");
+                    Context* parentContext = &contexts[contexts.size() - 2];
+                    if (parentContext->Declaration.Type->Name.starts_with("std::vector"))
+                    {
+                        Context* vectorContext = parentContext;
+                        const Type* vectorType = vectorContext->Declaration.Type;
+                        const Method* addDefault = vectorType->GetMethod("AddDefault");
+
+                        if (current->Declaration.IsPtr)
+                        {
+                            if (current->Value == nullptr)
+                            {
+                                current->Value = current->Declaration.Type->New();
+                            }
+                            void** addValue = nullptr;
+                            addDefault->UnSafeCall(vectorContext->Value, &addValue, {});
+                            *addValue = current->Value;
+                        }
+                        else
+                        {
+                            void* addValue = nullptr;
+                            addDefault->UnSafeCall(vectorContext->Value, &addValue, {});
+                            current->Value = addValue;
+                        }
+                    }
+                    else if ( parentContext->Declaration.Type->Name.starts_with("std::map"))
+                    {
+                        EJSON_ERROR("not implemented");
+                    }
+                    else
+                    {
+                        EJSON_ERROR("internal errror");
+                    }
+                }
+                else
+                {
+                    // clear vector if already exist
+                    if (current->Value != nullptr)
+                        current->Declaration.Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});                    
+                }
+
+
+
+                PushContext(nullptr, current->Declaration.Type->Templates[0]);
+            }
+            else
+            {
+                PushInvalid();
+            }
         }
 
         void ArrayEnd() noexcept
         {
+            PopContext();
         }
 
         void ValueBool(bool b) noexcept
         {
-            HandlePendingType();
-
-            if (!current->Value)
+            if (!ValueBegin())
                 return;
 
-            if ( *current->Declaration->Type == TypeOf<bool>())
+            if ( *current->Declaration.Type == TypeOf<bool>())
             {
                 *(bool*)current->Value = b;
             }
@@ -341,30 +385,27 @@ namespace ejson
 
         void ValueNull() noexcept
         {
-            HandlePendingType();
-
-            if (!current->Value)
+            if (!ValueBegin())
                 return;
 
-            if (current->Declaration->IsPtr)
+            if (current->Declaration.IsPtr)
             {
                 *(void**)current->Value = nullptr;
             }
+            ValueEnd();
         }
 
         void ValueString(const string_view& str) noexcept
         {
-            HandlePendingType(str);
-
-            if (!current->Value)
+            if (!ValueBegin())
                 return;
 
-            if (current->Declaration->Type->Kind == Kind::Enum)
+            if (current->Declaration.Type->Kind == Kind::Enum)
             {
-                size_t enumValue = current->Declaration->Type->GetEnumValue(ToString(str));
+                size_t enumValue = current->Declaration.Type->GetEnumValue(ToString(str));
                 if (enumValue != InvalidIndex)
                 {
-                    switch (current->Declaration->Type->Parent->Id )
+                    switch (current->Declaration.Type->Parent->Id )
                     {
                         case GetTypeId<s8>():
                             *(s8*)current->Value = (s8)enumValue;
@@ -395,170 +436,123 @@ namespace ejson
                     }
                 }
             }
-            else if (*current->Declaration->Type == TypeOf<std::string>())
+            else if (*current->Declaration.Type == TypeOf<std::string>())
             {
                 *((std::string*)current->Value) = ToString(str);
             }
-            else if (*current->Declaration->Type == TypeOf<std::wstring>())
+            else if (*current->Declaration.Type == TypeOf<std::wstring>())
             {
                 *((std::wstring*)current->Value) = ToWString(str);
             }
+            ValueEnd();
         }
 
         void ValueNumber(number value) noexcept
         {
-            HandlePendingType();
-
-            if (!current->Value)
+            if (!ValueBegin())
                 return;
 
-            if (current->IsVector)
+            switch (current->Declaration.Type->Id)
             {
-                switch (current->Declaration->Type->Templates[0].Type->Id)
-                {
-                    case GetTypeId<s8>():
-                        VectorAdd((s8)value);
-                        break;
-                    case GetTypeId<s16>():
-                        VectorAdd((s16)value);
-                        break;
-                    case GetTypeId<s32>():
-                        VectorAdd((s32)value);
-                        break;
-                    case GetTypeId<s64>():
-                        VectorAdd((s64)value);
-                        break;
-                    case GetTypeId<u8>():
-                        VectorAdd((u8)value);
-                        break;
-                    case GetTypeId<u16>():
-                        VectorAdd((u16)value);
-                        break;
-                    case GetTypeId<u32>():
-                        VectorAdd((u32)value);
-                        break;
-                    case GetTypeId<u64>():
-                        VectorAdd((u64)value);
-                        break;
-                    case GetTypeId<f32>():
-                        VectorAdd((f32)value);
-                        break;
-                    case GetTypeId<f64>():
-                        VectorAdd(value);
-                        break;
-                    default:
-                        break;
-                }
+                case GetTypeId<s8>():
+                    SetTypedValue((s8)value);
+                    break;
+                case GetTypeId<s16>():
+                    SetTypedValue((s16)value);
+                    break;
+                case GetTypeId<s32>():
+                    SetTypedValue((s32)value);
+                    break;
+                case GetTypeId<s64>():
+                    SetTypedValue((s64)value);
+                    break;
+                case GetTypeId<u8>():
+                    SetTypedValue((u8)value);
+                    break;
+                case GetTypeId<u16>():
+                    SetTypedValue((u16)value);
+                    break;
+                case GetTypeId<u32>():
+                    SetTypedValue((u32)value);
+                    break;
+                case GetTypeId<u64>():
+                    SetTypedValue((u64)value);
+                    break;
+                case GetTypeId<f32>():
+                    SetTypedValue((f32)value);
+                    break;
+                case GetTypeId<f64>():
+                    SetTypedValue(value);
+                    break;
+                default:
+                    break;
             }
-            else
-            {
-                switch (current->Declaration->Type->Id)
-                {
-                    case GetTypeId<s8>():
-                        *(s8*)current->Value = (s8)value;
-                        break;
-                    case GetTypeId<s16>():
-                        *(s16*)current->Value = (s16)value;
-                        break;
-                    case GetTypeId<s32>():
-                        *(s32*)current->Value = (s32)value;
-                        break;
-                    case GetTypeId<s64>():
-                        *(s64*)current->Value = (s64)value;
-                        break;
-                    case GetTypeId<u8>():
-                        *(u8*)current->Value = (u8)value;
-                        break;
-                    case GetTypeId<u16>():
-                        *(u16*)current->Value = (u16)value;
-                        break;
-                    case GetTypeId<u32>():
-                        *(u32*)current->Value = (u32)value;
-                        break;
-                    case GetTypeId<u64>():
-                        *(u64*)current->Value = (u64)value;
-                        break;
-                    case GetTypeId<f32>():
-                        *(f32*)current->Value = (f32)value;
-                        break;
-                    case GetTypeId<f64>():
-                        *(f64*)current->Value = (f64)value;
-                        break;
-                    default:
-                        break;
-                }
-            }
+
+            ValueEnd();
         }
 
     private:
 
+        enum class ContextType : u8
+        {
+            Invalid,
+            Value,
+            Vector,
+            Map
+        };
+
         struct Context
         {
+            ContextType Type = ContextType::Invalid;
             void* Value = nullptr;
-            const Declaration* Declaration = nullptr;
-            bool IsVector = false;
-            const ::eti::Declaration* T1 = nullptr;
-            const ::eti::Declaration* T2 = nullptr;
-            const Method* Add = nullptr;
+            Declaration Declaration;
         };
 
         bool pendingType = false;
         string pendingKey = {};
 
-        void HandlePendingType(string_view typeName = {})
+
+        bool ValueBegin(string_view typeName = {})
         {
-            if (pendingType)
-            {
-                if (current->Value == nullptr)
-                {
-                    if (current->Declaration != nullptr)
-                    {
-                        if (pendingKey == EJSON_TEXT("@type"))
-                        {
-                            const Type* type = eti::Repository::Instance().GetType(ToString(typeName));
-                            if (type != nullptr)
-                            {
-                                if (IsA(*type, *current->Declaration->Type))
-                                    current->Value = type->UnSafeNew();
-                            }
-                        }
+            if (current->Type == ContextType::Invalid)
+                return false;
 
-                        if (current->Value == nullptr)
-                            current->Value = current->Declaration->Type->UnSafeNew();
-                    }
-                }
+            HandlePendingType(typeName);
 
-                if (current->Value)
-                {
-                    const Property* property = current->Declaration->Type->GetProperty(ToString(pendingKey));
-                    if (property)
-                    {
-                        void* propertyPtr = ((u8*)current->Value) + property->Offset;
-                        pendingKey = {};
-                        PushContext(propertyPtr, &property->Variable.Declaration);
-                        return;
-                    }
-                }
-
-                pendingKey = {};
-                PushContext(nullptr, nullptr);
-            }
-            pendingType = false;
-
+            return true;
         }
 
-        void PushContext(void* value, const Declaration* declaration)
+        void ValueEnd()
         {
-            if (declaration && declaration->Type->Name.starts_with("std::vector"))
+        }
+
+        void PushInvalid()
+        {
+            Context context;
+            context.Type = ContextType::Invalid;
+            contexts.push_back(context);
+        }
+
+        void PushContext(void* value, const Declaration& declaration)
+        {
+            if (declaration.Type->Name.starts_with("std::vector"))
             {
-                contexts.push_back({ value, declaration, true, &declaration->Type->Templates[0], nullptr, declaration->Type->GetMethod("Add") });
-                current = &contexts[contexts.size() - 1];
+                Context context;
+                context.Type = ContextType::Vector;
+                context.Value = value;
+                context.Declaration = declaration;
+                contexts.push_back(context);
             }
             else
             {
-                contexts.push_back({ value, declaration, false });
-                current = &contexts[contexts.size() - 1];
+                Context context;
+                context.Type = ContextType::Value;
+                context.Value = value;
+                context.Declaration = declaration;
+                contexts.push_back(context);
             }
+
+            current = &contexts[contexts.size() - 1];
         }
 
         void PopContext()
@@ -567,21 +561,109 @@ namespace ejson
             current = contexts.size() ? &contexts[contexts.size() - 1] : nullptr;
         }
 
-        template <typename T>
-        void VectorAdd(const T& value)
+        void HandlePendingType(string_view typeName = {})
         {
-            EJSON_ASSERT(current->Add != nullptr, "not a vector");
-            EJSON_ASSERT(*current->Declaration->Type->Templates[0].Type == TypeOf<T>(), "not vaid vector type" );
-            const T* ptr = &value;
-            void* args[1] = { (void*) &ptr};
-            current->Add->UnSafeCall(current->Value, NoReturn, args);
+            if (pendingType)
+            {
+                if (current->Value == nullptr)
+                {
+                    if (pendingKey == EJSON_TEXT("@type"))
+                    {
+                        const Type* type = eti::Repository::Instance().GetType(ToString(typeName));
+                        if (type != nullptr)
+                        {
+                            if (IsA(*type, *current->Declaration.Type))
+                                current->Value = type->New();
+                        }
+                    }
+
+                    if (current->Value == nullptr)
+                        current->Value = current->Declaration.Type->New();
+                }
+
+                if (current->Value)
+                {
+                    const Property* property = current->Declaration.Type->GetProperty(ToString(pendingKey));
+                    if (property)
+                    {
+                        void* propertyPtr = ((u8*)current->Value) + property->Offset;
+                        pendingKey = {};
+                        PushContext(propertyPtr, property->Variable.Declaration);
+                        return;
+                    }
+                }
+
+                pendingKey = {};
+                PushInvalid();
+            }
+            pendingType = false;
+        }
+
+        template<typename T>
+        void SetTypedValue(T value) noexcept
+        {
+            if (current->Value == nullptr)
+            {
+                Context* parentContext = &contexts[contexts.size() - 2];
+
+                if (parentContext->Declaration.Type->Name.starts_with("std::vector"))
+                {
+                    // vector or map
+                    Context* vectorContext = parentContext;
+                    const Type* vectorType = vectorContext->Declaration.Type;
+                    const Method* addDefault = vectorType->GetMethod("AddDefault");
+
+                    if (current->Declaration.IsPtr)
+                    {
+                        if (current->Value == nullptr)
+                        {
+                            current->Value = current->Declaration.Type->New();
+                            *(T*)current->Value = value;
+                        }
+                        void** addValue = nullptr;
+                        addDefault->UnSafeCall(vectorContext->Value, &addValue, {});
+                        *addValue = current->Value;
+                    }
+                    else
+                    {
+                        void* addValue = nullptr;
+                        addDefault->UnSafeCall(vectorContext->Value, &addValue, {});
+                        *(T*)addValue = value;
+                    }
+                }
+                else if (parentContext->Declaration.Type->Name.starts_with("std::map"))
+                {
+                    EJSON_ERROR("not implemented");
+                }
+                else
+                {
+                    EJSON_ERROR("internal errror");
+                }
+            }
+            else if (current->Type == ContextType::Value)
+            {
+                if (current->Declaration.IsPtr)
+                {
+                    if (current->Value == nullptr)
+                    {
+                        current->Value = current->Declaration.Type->New();
+                    }
+                }
+                *(T*)current->Value = value;
+            }
         }
 
         Context* current = nullptr;
-        Declaration rootDeclaration = {};
 
         std::vector<Context> contexts;
     };
+
+    template <typename T>
+    bool ReadType(string_view json, T& value) noexcept
+    {
+        ParserError error;
+        return ReadType(json, value, error);
+    }
 
     template <typename T>
     bool ReadType(string_view json, T& value, ParserError& error) noexcept
@@ -595,7 +677,7 @@ namespace ejson
         else
             ptr = &value;
 
-        TypeReader typeReader(ptr, &TypeOf<T>());
+        TypeReader typeReader(ptr, eti::internal::MakeDeclaration<T>());
         JsonReader jsonReader(typeReader, stringReader);
         if (jsonReader.Parse())
         {

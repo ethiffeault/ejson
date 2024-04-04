@@ -86,6 +86,14 @@
     #endif
 
     #ifndef ETI_REPOSITORY
+        // Enable Repository
+        //
+        //  All type will self register so it's possible to make at runtime:
+        //      const Type* type = Repository::GetTypes(fooId);
+        //      const Type* type = Repository::GetTypes("Foo");
+        //
+        // For stuff like serialization...
+        //
         // need a #define in one cpp file to work: ETI_REPOSITORY_IMPL()
         #define ETI_REPOSITORY 1
 
@@ -373,7 +381,6 @@ namespace eti
             }
         };
 
-
         // member function call void return
         template<typename OBJECT, typename... ARGS>
         struct CallMemberFunctionImpl<OBJECT, void, ARGS...>
@@ -454,6 +461,24 @@ namespace eti
 
         template<typename T>
         static constexpr bool HaveGetTypeStatic = HaveGetTypeStaticImpl<T>::value;
+
+        template<typename T>
+        static std::function<void*()> GetNew()
+        {
+            if constexpr (std::is_default_constructible_v<T>)
+                return []() { return new T(); };
+            else
+                return nullptr;
+        }
+
+        template<typename T>
+        static std::function<void(void* /* dst */)> GetDelete()
+        {
+            if constexpr (std::is_default_constructible_v<T>)
+                return [](void* dst) { delete (T*)dst; };
+            else
+                return nullptr;
+        }
 
         template<typename T>
         static std::function<void(void* /* dst */)> GetConstruct()
@@ -746,6 +771,8 @@ namespace eti
         size_t Size = 0;
         size_t Align = 0;
         const Type* Parent = nullptr;
+        std::function<void*()> New;
+        std::function<void(void* /* dst */ )> Delete;
         std::function<void(void* /* dst */)> Construct;
         std::function<void(void* /* src */, void* /* dst */)> CopyConstruct;
         std::function<void(void* /* src */, void* /* dst */)> MoveConstruct;
@@ -761,6 +788,8 @@ namespace eti
         bool operator==(const Type& other) const { return Id == other.Id; }
         bool operator!=(const Type& other) const { return !(*this == other); }
 
+        bool HaveNew() const { return New != nullptr; }
+        bool HaveDelete() const { return Delete != nullptr; }
         bool HaveConstruct() const { return Construct != nullptr; }
         bool HaveCopyConstruct() const { return CopyConstruct != nullptr; }
         bool HaveMove() const { return MoveConstruct != nullptr; }
@@ -770,21 +799,6 @@ namespace eti
         const Property* GetProperty(TypeId propertyId) const;
         const Method* GetMethod(std::string_view name) const;
         const Method* GetMethod(TypeId methodId) const;
-
-        template<typename T>
-        T* New() const;
-
-        void* UnSafeNew() const;
-
-
-        template<typename T>
-        T* NewCopy(const T& other) const;
-
-        template<typename T>
-        void Delete(T* ptr) const;
-
-        template<typename FROM, typename TO>
-        void Move(FROM& from, TO& to) const;
 
         template <typename T>
         const T* GetAttribute() const;
@@ -986,9 +1000,10 @@ namespace eti
     ETI_CLASS_EXT(CLASS, BASE, ETI_PROPERTIES(), ETI_METHODS())
 
 #define ETI_STRUCT_EXT(STRUCT, PROPERTIES, METHODS, ...) \
-    ETI_INTERNAL_TYPE_DECL(STRUCT, nullptr, ::eti::Kind::Struct, __VA_ARGS__) \
-    ETI_INTERNAL_PROPERTY(PROPERTIES) \
-    ETI_INTERNAL_METHOD(METHODS)
+    public: \
+        ETI_INTERNAL_TYPE_DECL(STRUCT, nullptr, ::eti::Kind::Struct, __VA_ARGS__) \
+        ETI_INTERNAL_PROPERTY(PROPERTIES) \
+        ETI_INTERNAL_METHOD(METHODS)
 
 #define ETI_STRUCT(STRUCT, ...) \
     ETI_STRUCT_EXT(STRUCT, ETI_PROPERTIES(), ETI_METHODS(), __VA_ARGS__)
@@ -1359,6 +1374,8 @@ namespace eti
                         sizeof(T),
                         alignof(T),
                         parent,
+                        utils::GetNew<T>(),
+                        utils::GetDelete<T>(),
                         utils::GetConstruct<T>(),
                         utils::GetCopyConstruct<T>(),
                         utils::GetMoveConstruct<T>(),
@@ -1385,6 +1402,8 @@ namespace eti
                         nullptr,
                         nullptr,
                         nullptr,
+                        nullptr,
+                        nullptr,
                         {},
                         {},
                         {},
@@ -1403,6 +1422,8 @@ namespace eti
                     Kind::Void,
                     0,
                     0,
+                    nullptr,
+                    nullptr,
                     nullptr,
                     nullptr,
                     nullptr,
@@ -1687,65 +1708,6 @@ namespace eti
         return nullptr;
     }
 
-    template<typename T>
-    T* Type::New() const
-    {
-        ETI_ASSERT(IsA(TypeOf<T>(), *this), "try to call Type::New with non compatible type");
-        ETI_ASSERT(HaveConstruct(), "try to call Type::New on Type without Construct");
-#ifdef _MSC_VER
-        void* memory = _aligned_malloc(Size, Align);
-#else
-        void* memory = aligned_alloc(Size, Align);
-#endif
-        ETI_ASSERT(memory, "out of memory on Type::New call");
-        Construct(memory);
-        return static_cast<T*>(memory);
-    }
-
-    inline void* Type::UnSafeNew() const
-    {
-        ETI_ASSERT(HaveConstruct(), "try to call Type::New on Type without Construct");
-        void* memory = _aligned_malloc(Size, Align);
-        ETI_ASSERT(memory, "out of memory on Type::New call");
-        Construct(memory);
-        return (memory);
-    }
-
-    template<typename T>
-    T* Type::NewCopy(const T& other) const
-    {
-        ETI_ASSERT(IsA(TypeOf<T>(), *this), "try to call Type::New with non compatible type");
-        ETI_ASSERT(HaveCopyConstruct(), "try to call Type::New on Type without Construct");
-#ifdef _MSC_VER
-        void* memory = _aligned_malloc(Size, Align);
-#else
-        void* memory = aligned_alloc(Size, Align);
-#endif
-        ETI_ASSERT(memory, "out of memory on Type::New call");
-        CopyConstruct((void*) & other, memory);
-        return static_cast<T*>(memory);
-    }
-
-    template<typename T>
-    void Type::Delete(T* ptr) const
-    {
-        ETI_ASSERT(IsA(TypeOf<T>(), *this), "try to call Type::Delete with non compatible type");
-        ETI_ASSERT(HaveDestroy(), "try to call Type::Delete on Type without Destroy");
-        // support null delete
-        if (ptr == nullptr)
-            return;
-        Destruct(ptr);
-        free(ptr);
-    }
-
-    template<typename FROM, typename TO>
-    void Type::Move(FROM& from, TO& to) const
-    {
-        ETI_ASSERT(TypeOf<FROM>().Id == TypeOf<TO>().Id, "Move should be call using same type");
-        ETI_ASSERT(HaveMove(), "try to call Type::Move on Type without MoveConstruct");
-        MoveConstruct(&from, &to);
-    }
-
     template <typename T>
     const T* Type::GetAttribute() const
     {
@@ -1956,6 +1918,15 @@ namespace eti
 
 namespace eti::utils
 {
+
+    template<typename T>
+    T& VectorAddDefault(std::vector<T>& vector)
+    {
+        vector.push_back({});
+        T& addedValue = vector[vector.size() - 1];;
+        return addedValue;
+    }
+
     template<typename T>
     void VectorAddAt( std::vector<T>& vector, size_t index, const T& value)
     {
@@ -2021,12 +1992,13 @@ ETI_TEMPLATE_1_EXTERNAL
         ETI_METHOD_LAMBDA(GetSize, [](const std::vector<T1>& vector) { return vector.size(); }),
         ETI_METHOD_LAMBDA(GetAt, [](std::vector<T1>& vector, size_t index) -> T1& { return vector[index]; }),
         ETI_METHOD_LAMBDA(Add, [](std::vector<T1>& vector, const T1& value) { return vector.push_back(value); }),
+        ETI_METHOD_LAMBDA(AddDefault, [](std::vector<T1>& vector) -> T1& { return eti::utils::VectorAddDefault(vector); }),
         ETI_METHOD_LAMBDA(AddAt, [](std::vector<T1>& vector, size_t index, const T1& value) { eti::utils::VectorAddAt(vector, index, value); }),
         ETI_METHOD_LAMBDA(Contains, [](std::vector<T1>& vector, const T1& value) { return eti::utils::VectorContains(vector, value); }),
         ETI_METHOD_LAMBDA(Remove, [](std::vector<T1>& vector, const T1& value) { return eti::utils::VectorRemove(vector, value); }),
         ETI_METHOD_LAMBDA(RemoveSwap, [](std::vector<T1>& vector, const T1& value) { return eti::utils::VectorRemoveSwap(vector, value); }),
-        ETI_METHOD_LAMBDA(RemoveAt, [](std::vector<T1>& vector, size_t index) { return eti::utils::VectorRemoveAt(vector, index); }),
-        ETI_METHOD_LAMBDA(RemoveAtSwap, [](std::vector<T1>& vector, size_t index) { return eti::utils::VectorRemoveAtSwap(vector, index); }),
+        ETI_METHOD_LAMBDA(RemoveAt, [](std::vector<T1>& vector, size_t index) { eti::utils::VectorRemoveAt(vector, index); }),
+        ETI_METHOD_LAMBDA(RemoveAtSwap, [](std::vector<T1>& vector, size_t index) { eti::utils::VectorRemoveAtSwap(vector, index); }),
         ETI_METHOD_LAMBDA(Clear, [](std::vector<T1>& vector) { vector.clear(); }),
         ETI_METHOD_LAMBDA(Reserve, [](std::vector<T1>& vector, size_t size) { vector.reserve(size); })
     )
