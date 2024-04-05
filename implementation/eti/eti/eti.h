@@ -1999,7 +1999,7 @@ namespace eti::utils
     }
 
     template<typename KEY,typename VALUE>
-    VALUE& Insert(std::map<KEY,VALUE>& map, const KEY& key, const VALUE& value)
+    VALUE& MapInsert(std::map<KEY,VALUE>& map, const KEY& key, const VALUE& value)
     {
         auto result = map.insert({ key, value });
         ETI_ASSERT(result.second == true, "key already exist");
@@ -2007,9 +2007,24 @@ namespace eti::utils
     }
 
     template<typename KEY,typename VALUE>
-    VALUE& InsertOrGet(std::map<KEY,VALUE>& map, const KEY& key, const VALUE& value)
+    VALUE& MapInsertDefault(std::map<KEY,VALUE>& map, const KEY& key)
+    {
+        auto result = map.insert({ key, {} });
+        ETI_ASSERT(result.second == true, "key already exist");
+        return result.first->second;
+    }
+
+    template<typename KEY,typename VALUE>
+    VALUE& MapInsertOrGet(std::map<KEY,VALUE>& map, const KEY& key, const VALUE& value)
     {
         auto result = map.insert({ key, value });
+        return result.first->second;
+    }
+
+    template<typename KEY,typename VALUE>
+    VALUE& MapInsertDefaultOrGet(std::map<KEY,VALUE>& map, const KEY& key)
+    {
+        auto result = map.insert({ key, {} });
         return result.first->second;
     }
 
@@ -2062,8 +2077,10 @@ ETI_TEMPLATE_2_EXTERNAL
         ETI_METHOD_LAMBDA(GetSize, [](std::map<T1,T2>& map) { return map.size(); }),
         ETI_METHOD_LAMBDA(GetValue, [](std::map<T1,T2>& map, const T1& key) -> T2* { return eti::utils::MapGetValue(map, key); }),
         ETI_METHOD_LAMBDA(Contains, [](std::map<T1,T2>& map, const T1& key) -> bool { return eti::utils::MapContains(map, key); }),
-        ETI_METHOD_LAMBDA(Insert, [](std::map<T1,T2>& map, const T1& key, const T2& value) -> T2& { return eti::utils::Insert(map, key, value); }),
-        ETI_METHOD_LAMBDA(InsertOrGet, [](std::map<T1,T2>& map, const T1& key, const T2& value) -> T2& { return eti::utils::InsertOrGet(map, key, value); }),
+        ETI_METHOD_LAMBDA(Insert, [](std::map<T1,T2>& map, const T1& key, const T2& value) -> T2& { return eti::utils::MapInsert(map, key, value); }),
+        ETI_METHOD_LAMBDA(InsertDefault, [](std::map<T1,T2>& map, const T1& key) -> T2& { return eti::utils::MapInsertDefault(map, key); }),
+        ETI_METHOD_LAMBDA(InsertOrGet, [](std::map<T1,T2>& map, const T1& key, const T2& value) -> T2& { return eti::utils::MapInsertOrGet(map, key, value); }),
+        ETI_METHOD_LAMBDA(InsertDefaultOrGet, [](std::map<T1,T2>& map, const T1& key) -> T2& { return eti::utils::MapInsertDefaultOrGet(map, key); }),
         ETI_METHOD_LAMBDA(Remove, [](std::map<T1,T2>& map, const T1& key) -> bool { return eti::utils::MapRemove(map, key); }),
         ETI_METHOD_LAMBDA(Clear, [](std::map<T1,T2>& map) { map.clear(); }),
         ETI_METHOD_LAMBDA(GetKeys, [](std::map<T1,T2>& map, std::vector<T1>& keys) { eti::utils::MapGetKeys(map, keys); }),

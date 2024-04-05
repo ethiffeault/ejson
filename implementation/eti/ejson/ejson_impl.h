@@ -218,21 +218,14 @@ namespace ejson
                 const Method* getAt = declaration.Type->GetMethod("GetAt");
                 for (size_t i = 0; i < size; ++i)
                 {
-                    if (declaration.Type->Templates[0].IsPtr)
-                    {
-                        void** ptr = nullptr;
-                        void* args[1] = { &i };
-                        getAt->UnSafeCall((void*)value, &ptr, args);
-                        Write(declaration.Type->Templates[0], *ptr);
-                    }
-                    else
-                    {
-                        void* ptr = nullptr;
-                        void* args[1] = { &i };
-                        getAt->UnSafeCall((void*)value, &ptr, args);
-                        Write(declaration.Type->Templates[0], ptr);
+                    void* ptr = nullptr;
+                    void* args[1] = { &i };
+                    getAt->UnSafeCall((void*)value, &ptr, args);
 
-                    }
+                    if (declaration.Type->Templates[0].IsPtr)
+                        Write(declaration.Type->Templates[0], *(void**)ptr);
+                    else
+                        Write(declaration.Type->Templates[0], ptr);
                 }
                 jsonWriter.WriteArrayEnd();
             }
@@ -283,7 +276,11 @@ namespace ejson
                             std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
                             jsonWriter.WriteProperty(*str);
                         }
-                        Write(declaration.Type->Templates[1], keyValue);
+
+                        if (declaration.Type->Templates[1].IsPtr)
+                            Write(declaration.Type->Templates[1], *(void**)keyValue);
+                        else
+                            Write(declaration.Type->Templates[1], keyValue);
                     }
                 }
                 jsonWriter.WriteObjectEnd();
@@ -298,6 +295,9 @@ namespace ejson
     {
         TypeReader(void* root, const Declaration& declaration) noexcept
         {
+            if (declaration.IsPtr && root == nullptr)
+                root = declaration.Type->New();
+
             PushContext(root, declaration);
         }
 
@@ -321,11 +321,23 @@ namespace ejson
 
                 if (current->Type == ContextType::Map)
                 {
-                    
+                    if (current->Value == nullptr)
+                    {
+                        // inside vector or map...
+                        EJSON_ERROR("not implemented");
+                    }
+                    else
+                    {
+                        // already exist, clear map
+                        current->Declaration.Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});                    
+                    }
+
+                    PushContext(nullptr, current->Declaration.Type->Templates[1]);
                 }
                 else // current->Type == ContextType::Object
                 {
-                    
+                    // object 
+                    EJSON_ERROR("not implemented");
                 }
             }
             else
@@ -344,9 +356,22 @@ namespace ejson
 
             if (current->Value == nullptr)
             {
-                pendingKey = key;
-                pendingType = true;
-                return;
+                EJSON_ASSERT(contexts.size() > 1, "internal error");
+                Context* parentContext = &contexts[contexts.size() - 2];
+
+                EJSON_ASSERT(parentContext->Type == ContextType::Map || parentContext->Type == ContextType::Object, "internal error");
+
+                if (parentContext->Type == ContextType::Map)
+                {
+                    mapKey = key;
+                    return;
+                }
+                else // parentContext->Type == ContextType::Object
+                {
+                    pendingKey = key;
+                    pendingType = true;
+                    return;
+                }
             }
             else
             {
@@ -415,11 +440,8 @@ namespace ejson
                 else
                 {
                     // clear vector if already exist
-                    if (current->Value != nullptr)
-                        current->Declaration.Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});                    
+                    current->Declaration.Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});                    
                 }
-
-
 
                 PushContext(nullptr, current->Declaration.Type->Templates[0]);
             }
@@ -571,9 +593,12 @@ namespace ejson
             Declaration Declaration;
         };
 
+        string mapKey = {};
+
         bool pendingType = false;
         string pendingKey = {};
-
+        Context* current = nullptr;
+        std::vector<Context> contexts;
 
         bool ValueBegin(string_view typeName = {})
         {
@@ -704,7 +729,33 @@ namespace ejson
                 }
                 else if (parentContext->Declaration.Type->Name.starts_with("std::map"))
                 {
-                    EJSON_ERROR("not implemented");
+                    EJSON_ASSERT(mapKey != EJSON_TEXT(""), "internal error");
+
+                    Context* mapContext = parentContext;
+                    const Type* mapType = mapContext->Declaration.Type;
+                    const Method* insert = mapType->GetMethod("InsertDefaultOrGet");
+
+                    c_string cMapKey = ToString(mapKey);
+                    c_string* cMapKeyPtr = &cMapKey;
+                    void* args[1] = { &cMapKeyPtr };
+
+                    if (current->Declaration.IsPtr)
+                    {
+                        if (current->Value == nullptr)
+                        {
+                            current->Value = current->Declaration.Type->New();
+                            *(T*)current->Value = value;
+                        }
+                        void** insertedValue = nullptr;
+                        insert->UnSafeCall(mapContext->Value, &insertedValue, args);
+                        *insertedValue = current->Value;
+                    }
+                    else
+                    {
+                        void* insertedValue = nullptr;
+                        insert->UnSafeCall(mapContext->Value, &insertedValue, args);
+                        *(T*)insertedValue = value;
+                    }
                 }
                 else
                 {
@@ -723,10 +774,6 @@ namespace ejson
                 *(T*)current->Value = value;
             }
         }
-
-        Context* current = nullptr;
-
-        std::vector<Context> contexts;
     };
 
     template <typename T>

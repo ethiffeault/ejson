@@ -325,6 +325,31 @@ namespace test_04
             WriteType(map, json);
             REQUIRE(json == refJson);
         }
+
+        {
+            std::map<std::string, int*> map;
+            map["1212"] = new int;;
+            *map["1212"] = 1212;
+            string json;
+            WriteType(map, json);
+            REQUIRE(json == refJson);
+            delete map["1212"];
+        }
+
+        {
+            std::map<std::string, int> map;
+            ReadType(refJson, map);
+            REQUIRE(map.size() == 1);
+            REQUIRE(map["1212"] == 1212);
+        }
+
+        {
+            std::map<std::string, int*> map;
+            ReadType(refJson, map);
+            REQUIRE(map.size() == 1);
+            REQUIRE(*map["1212"] == 1212);
+            delete map["1212"];
+        }
     }
 }
 //namespace test_11
