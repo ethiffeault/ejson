@@ -1001,9 +1001,9 @@ namespace eti
 
 #define ETI_STRUCT_EXT(STRUCT, PROPERTIES, METHODS, ...) \
     public: \
-        ETI_INTERNAL_TYPE_DECL(STRUCT, nullptr, ::eti::Kind::Struct, __VA_ARGS__) \
-        ETI_INTERNAL_PROPERTY(PROPERTIES) \
-        ETI_INTERNAL_METHOD(METHODS)
+    ETI_INTERNAL_TYPE_DECL(STRUCT, nullptr, ::eti::Kind::Struct, __VA_ARGS__) \
+    ETI_INTERNAL_PROPERTY(PROPERTIES) \
+    ETI_INTERNAL_METHOD(METHODS)
 
 #define ETI_STRUCT(STRUCT, ...) \
     ETI_STRUCT_EXT(STRUCT, ETI_PROPERTIES(), ETI_METHODS(), __VA_ARGS__)
@@ -1910,7 +1910,7 @@ namespace eti
 {
     class Object
     {
-        ETI_BASE(Object)
+    ETI_BASE(Object)
     public:
         virtual ~Object() {}
     };
@@ -1981,6 +1981,54 @@ namespace eti::utils
         std::swap(vector[index], vector.back());
         vector.pop_back();
     }
+
+    template<typename KEY,typename VALUE>
+    VALUE* MapGetValue(std::map<KEY,VALUE>& map, const KEY& key)
+    {
+        auto it = map.find(key);
+        if (it != map.end())
+            return &it->second;
+        return nullptr;
+    }
+
+    template<typename KEY,typename VALUE>
+    bool MapContains(std::map<KEY,VALUE>& map, const KEY& key)
+    {
+        auto it = map.find(key);
+        return it != map.end();
+    }
+
+    template<typename KEY,typename VALUE>
+    VALUE& Insert(std::map<KEY,VALUE>& map, const KEY& key, const VALUE& value)
+    {
+        auto result = map.insert({ key, value });
+        ETI_ASSERT(result.second == true, "key already exist");
+        return result.first->second;
+    }
+
+    template<typename KEY,typename VALUE>
+    VALUE& InsertOrGet(std::map<KEY,VALUE>& map, const KEY& key, const VALUE& value)
+    {
+        auto result = map.insert({ key, value });
+        return result.first->second;
+    }
+
+    template<typename KEY,typename VALUE>
+    bool MapRemove(std::map<KEY,VALUE>& map, const KEY& key)
+    {
+        size_t numErased = map.erase(key);
+        return numErased > 0;
+    }
+
+    template<typename KEY,typename VALUE>
+    void MapGetKeys(std::map<KEY,VALUE>& map, std::vector<KEY>& keys)
+    {
+        keys.clear();
+        for( auto& [key, value] : map)
+        {
+            keys.push_back(key);
+        }
+    }
 }
 
 // declare vector type with common methods
@@ -2011,7 +2059,14 @@ ETI_TEMPLATE_2_EXTERNAL
     ETI_PROPERTIES(),
     ETI_METHODS
     (
-        ETI_METHOD_LAMBDA(GetSize, [](std::map<T1,T2>& map) { return map.size(); })
+        ETI_METHOD_LAMBDA(GetSize, [](std::map<T1,T2>& map) { return map.size(); }),
+        ETI_METHOD_LAMBDA(GetValue, [](std::map<T1,T2>& map, const T1& key) -> T2* { return eti::utils::MapGetValue(map, key); }),
+        ETI_METHOD_LAMBDA(Contains, [](std::map<T1,T2>& map, const T1& key) -> bool { return eti::utils::MapContains(map, key); }),
+        ETI_METHOD_LAMBDA(Insert, [](std::map<T1,T2>& map, const T1& key, const T2& value) -> T2& { return eti::utils::Insert(map, key, value); }),
+        ETI_METHOD_LAMBDA(InsertOrGet, [](std::map<T1,T2>& map, const T1& key, const T2& value) -> T2& { return eti::utils::InsertOrGet(map, key, value); }),
+        ETI_METHOD_LAMBDA(Remove, [](std::map<T1,T2>& map, const T1& key) -> bool { return eti::utils::MapRemove(map, key); }),
+        ETI_METHOD_LAMBDA(Clear, [](std::map<T1,T2>& map) { map.clear(); }),
+        ETI_METHOD_LAMBDA(GetKeys, [](std::map<T1,T2>& map, std::vector<T1>& keys) { eti::utils::MapGetKeys(map, keys); }),
     )
 )
 
