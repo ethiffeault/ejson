@@ -240,8 +240,53 @@ namespace ejson
             // map
             if (declaration.Type->Name.starts_with("std::map"))
             {
-                // todo
-                jsonWriter.WriteNull();
+                jsonWriter.WriteObjectBegin();
+
+                const Type& keyType = *declaration.Type->Templates[0].Type;
+
+                if ( (keyType == TypeOf<c_string>() || keyType == TypeOf<w_string>()) && declaration.Type->Templates[0].IsValue)
+                {
+                    const Type& valueType = *declaration.Type->Templates[1].Type;
+
+                    // get all keys
+                    const Method* mapGetKeys = declaration.Type->GetMethod("GetKeys");
+                    const Method* mapGetValue = declaration.Type->GetMethod("GetValue");
+                    const Type& keysType = *mapGetKeys->Arguments[1].Declaration.Type;
+                    void* keys = keysType.New();
+                    void* args[1] = { &keys };
+                    mapGetKeys->UnSafeCall((void*)value, NoReturn, args);
+
+                    size_t size;
+                    keysType.GetMethod("GetSize")->UnSafeCall(keys, &size, {});
+                    const Method* keysGetAt = keysType.GetMethod("GetAt");
+
+                    for (size_t i = 0; i < size; ++i)
+                    {
+                        void* ptrKey = nullptr;
+                        void* getAtArgs[1] = { &i };
+                        keysGetAt->UnSafeCall(keys, &ptrKey, getAtArgs);
+
+                        void* keyValue;
+                        void* ptrValue = nullptr;
+                        void* getValueArgs[1] = {&ptrKey};
+                        mapGetValue->UnSafeCall((void*)value, &keyValue, getValueArgs);
+
+                        if (keyType == TypeOf<c_string>() )
+                        {
+                            c_string* str = (c_string*)ptrKey;
+                            std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
+                            jsonWriter.WriteProperty(*str);
+                        }
+                        else // keyType == TypeOf<w_string>()
+                        {
+                            w_string* str = (w_string*)ptrKey;
+                            std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
+                            jsonWriter.WriteProperty(*str);
+                        }
+                        Write(declaration.Type->Templates[1], keyValue);
+                    }
+                }
+                jsonWriter.WriteObjectEnd();
             }
         }
 
@@ -270,6 +315,23 @@ namespace ejson
 
         void ObjectBegin() noexcept
         {
+            if (ValueBegin())
+            {
+                EJSON_ASSERT(current->Type == ContextType::Map || current->Type == ContextType::Object, "should be map or object");
+
+                if (current->Type == ContextType::Map)
+                {
+                    
+                }
+                else // current->Type == ContextType::Object
+                {
+                    
+                }
+            }
+            else
+            {
+                PushInvalid();
+            }
         }
 
         void ObjectEnd() noexcept
@@ -498,7 +560,8 @@ namespace ejson
             Invalid,
             Value,
             Vector,
-            Map
+            Map,
+            Object
         };
 
         struct Context
@@ -539,6 +602,14 @@ namespace ejson
             {
                 Context context;
                 context.Type = ContextType::Vector;
+                context.Value = value;
+                context.Declaration = declaration;
+                contexts.push_back(context);
+            }
+            else if ( declaration.Type->Name.starts_with("std::map"))
+            {
+                Context context;
+                context.Type = ContextType::Map;
                 context.Value = value;
                 context.Declaration = declaration;
                 contexts.push_back(context);

@@ -312,6 +312,21 @@ namespace test_03
     }
 }
 
+
+namespace test_04
+{
+    TEST_CASE("test_04")
+    {
+        string refJson = EJSON_TEXT("{\"1212\":1212}");
+        {
+            std::map<std::string, int> map;
+            map["1212"] = 1212;
+            string json;
+            WriteType(map, json);
+            REQUIRE(json == refJson);
+        }
+    }
+}
 //namespace test_11
 //{
 //    TEST_CASE("test_11")
