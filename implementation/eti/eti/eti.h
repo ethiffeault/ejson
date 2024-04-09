@@ -663,7 +663,6 @@ namespace eti
         Struct,     // ETI_STRUCT_EXT
         Pod,        // ETI_POD
         Enum,       // ETI_ENUM
-        Template,   // ETI_TEMPLATE_X
         Unknown,    // automatic declared type, when user not supply it's own declaration
         Forward     // forward type
     };
@@ -681,8 +680,6 @@ namespace eti
                 return "struct";
             case Kind::Pod:
                 return "pod";
-            case Kind::Template:
-                return "template";
             case Kind::Enum:
                 return "enum";
             case Kind::Unknown:
@@ -1160,15 +1157,15 @@ namespace eti
     }
 
 
-#define ETI_TEMPLATE_1_EXTERNAL(TEMPLATE_NAME, PROPERTIES, METHODS, ...) \
+#define ETI_EXTERNAL_BASE_T1(TYPE, PROPERTIES, METHODS, ...) \
     namespace eti \
     { \
         template <typename T1> \
-        struct TypeOfImpl<TEMPLATE_NAME<T1>> \
+        struct TypeOfImpl<TYPE<T1>> \
         { \
             static const ::eti::Type& GetTypeStatic() \
             { \
-                using Self = TEMPLATE_NAME<T1>; \
+                using Self = TYPE<T1>; \
                 static bool initializing = false; \
                 static ::eti::Type type; \
                 if (initializing == false) \
@@ -1176,22 +1173,22 @@ namespace eti
                     initializing = true; \
                     static std::vector<::eti::Property> properties = { PROPERTIES }; \
                     static std::vector<::eti::Method> methods =  { METHODS  }; \
-                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::MakeDeclarations<T1>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Class, nullptr, properties, methods, ::eti::internal::MakeDeclarations<T1>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
                 } \
                 return type; \
             } \
         }; \
     }
 
-#define ETI_TEMPLATE_2_EXTERNAL(TEMPLATE_NAME, PROPERTIES, METHODS, ...) \
+#define ETI_EXTERNAL_CLASS_T1(TYPE, BASE, PROPERTIES, METHODS, ...) \
     namespace eti \
     { \
-        template <typename T1, typename T2> \
-        struct TypeOfImpl<TEMPLATE_NAME<T1, T2>> \
+        template <typename T1> \
+        struct TypeOfImpl<TYPE<T1>> \
         { \
             static const ::eti::Type& GetTypeStatic() \
             { \
-                using Self = TEMPLATE_NAME<T1,T2>; \
+                using Self = TYPE<T1>; \
                 static bool initializing = false; \
                 static ::eti::Type type; \
                 if (initializing == false) \
@@ -1199,7 +1196,53 @@ namespace eti
                     initializing = true; \
                     static std::vector<::eti::Property> properties = { PROPERTIES }; \
                     static std::vector<::eti::Method> methods =  { METHODS  }; \
-                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Template, nullptr, properties, methods, ::eti::internal::MakeDeclarations<T1,T2>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Class, &::eti::TypeOf<BASE>(), properties, methods, ::eti::internal::MakeDeclarations<T1>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
+                } \
+                return type; \
+            } \
+        }; \
+    }
+
+#define ETI_EXTERNAL_BASE_T2(TYPE, PROPERTIES, METHODS, ...) \
+    namespace eti \
+    { \
+        template <typename T1, typename T2> \
+        struct TypeOfImpl<TYPE<T1, T2>> \
+        { \
+            static const ::eti::Type& GetTypeStatic() \
+            { \
+                using Self = TYPE<T1,T2>; \
+                static bool initializing = false; \
+                static ::eti::Type type; \
+                if (initializing == false) \
+                { \
+                    initializing = true; \
+                    static std::vector<::eti::Property> properties = { PROPERTIES }; \
+                    static std::vector<::eti::Method> methods =  { METHODS  }; \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Class, nullptr, properties, methods, ::eti::internal::MakeDeclarations<T1,T2>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
+                } \
+                return type; \
+            } \
+        }; \
+    }
+
+#define ETI_EXTERNAL_CLASS_T2(TYPE, BASE, PROPERTIES, METHODS, ...) \
+    namespace eti \
+    { \
+        template <typename T1, typename T2> \
+        struct TypeOfImpl<TYPE<T1, T2>> \
+        { \
+            static const ::eti::Type& GetTypeStatic() \
+            { \
+                using Self = TYPE<T1,T2>; \
+                static bool initializing = false; \
+                static ::eti::Type type; \
+                if (initializing == false) \
+                { \
+                    initializing = true; \
+                    static std::vector<::eti::Property> properties = { PROPERTIES }; \
+                    static std::vector<::eti::Method> methods =  { METHODS  }; \
+                    type = ::eti::internal::MakeType<Self>(::eti::Kind::Class, &::eti::TypeOf<BASE>(), properties, methods, ::eti::internal::MakeDeclarations<T1,T2>(), ::eti::internal::GetAttributes<::eti::Attribute>(__VA_ARGS__)); \
                 } \
                 return type; \
             } \
@@ -2046,8 +2089,12 @@ namespace eti::utils
     }
 }
 
+ETI_BASE_EXTERNAL(std::string, ETI_PROPERTIES(), ETI_METHODS())
+
+ETI_BASE_EXTERNAL(std::wstring, ETI_PROPERTIES(), ETI_METHODS())
+
 // declare vector type with common methods
-ETI_TEMPLATE_1_EXTERNAL
+ETI_EXTERNAL_BASE_T1
 (std::vector, 
     ETI_PROPERTIES(), 
     ETI_METHODS
@@ -2067,8 +2114,8 @@ ETI_TEMPLATE_1_EXTERNAL
     )
 )
 
-// todo: declare map type with common methods
-ETI_TEMPLATE_2_EXTERNAL
+// declare map type with common methods
+ETI_EXTERNAL_BASE_T2
 (
     std::map,
     ETI_PROPERTIES(),

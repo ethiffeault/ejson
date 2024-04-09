@@ -46,9 +46,6 @@ namespace ejson
             case Kind::Enum:
                 WriteEnum(declaration, value);
                 break;
-            case Kind::Template:
-                WriteTemplate(declaration, value);
-                break;
             case Kind::Unknown:
                 jsonWriter.WriteNull();
                 break;
@@ -77,41 +74,128 @@ namespace ejson
 
         void WriteClass(const eti::Declaration& declaration, const void* value) noexcept
         {
-            EJSON_ASSERT(value != nullptr, "cannot be null if not ptr");
-
-            const Type* type = declaration.Type;
-            if (declaration.IsPtr)
+            if (*declaration.Type  == TypeOf<std::string>())
             {
-                if (IsA(*type, TypeOf<eti::Object>()))
-                {
-                    eti::Object* object = (eti::Object*)value;
-                    type = &object->GetType();
-                }
+                jsonWriter.WriteString(*(std::string*)value);
             }
-
-            jsonWriter.WriteObjectBegin();
-
-            if (*type != *declaration.Type)
+            else if (*declaration.Type  == TypeOf<std::wstring>())
             {
-                jsonWriter.WriteProperty(EJSON_TEXT("@type"));
-                jsonWriter.WriteString(ToWString(type->Name));
+                jsonWriter.WriteString(*(std::wstring*)value);
             }
-
-            for (const Property& property : type->Properties)
+            else if (declaration.Type->Name.starts_with("std::vector"))
             {
-                jsonWriter.WriteProperty(property.Variable.Name);
-                if (property.Variable.Declaration.IsPtr)
+                jsonWriter.WriteArrayBegin();
+                size_t size;
+                declaration.Type->GetMethod("GetSize")->UnSafeCall((void*)value, &size, {});
+                const Type& itemType = *declaration.Type->Templates[0].Type;
+                const Method* getAt = declaration.Type->GetMethod("GetAt");
+                for (size_t i = 0; i < size; ++i)
                 {
-                    void** propertyValue = (void**)property.UnSafeGetPtr(const_cast<void*>(value));
-                    Write(property.Variable.Declaration, *propertyValue);
+                    void* ptr = nullptr;
+                    void* args[1] = { &i };
+                    getAt->UnSafeCall((void*)value, &ptr, args);
+
+                    if (declaration.Type->Templates[0].IsPtr)
+                        Write(declaration.Type->Templates[0], *(void**)ptr);
+                    else
+                        Write(declaration.Type->Templates[0], ptr);
                 }
-                else
-                {
-                    void* propertyValue = property.UnSafeGetPtr(const_cast<void*>(value));
-                    Write(property.Variable.Declaration, propertyValue);
-                }
+                jsonWriter.WriteArrayEnd();
             }
-            jsonWriter.WriteObjectEnd();
+            else if (declaration.Type->Name.starts_with("std::map"))
+            {
+                jsonWriter.WriteObjectBegin();
+
+                const Type& keyType = *declaration.Type->Templates[0].Type;
+
+                if ( (keyType == TypeOf<c_string>() || keyType == TypeOf<w_string>()) && declaration.Type->Templates[0].IsValue)
+                {
+                    const Type& valueType = *declaration.Type->Templates[1].Type;
+
+                    // get all keys
+                    const Method* mapGetKeys = declaration.Type->GetMethod("GetKeys");
+                    const Method* mapGetValue = declaration.Type->GetMethod("GetValue");
+                    const Type& keysType = *mapGetKeys->Arguments[1].Declaration.Type;
+                    void* keys = keysType.New();
+                    void* args[1] = { &keys };
+                    mapGetKeys->UnSafeCall((void*)value, NoReturn, args);
+
+                    size_t size;
+                    keysType.GetMethod("GetSize")->UnSafeCall(keys, &size, {});
+                    const Method* keysGetAt = keysType.GetMethod("GetAt");
+
+                    for (size_t i = 0; i < size; ++i)
+                    {
+                        void* ptrKey = nullptr;
+                        void* getAtArgs[1] = { &i };
+                        keysGetAt->UnSafeCall(keys, &ptrKey, getAtArgs);
+
+                        void* keyValue;
+                        void* ptrValue = nullptr;
+                        void* getValueArgs[1] = {&ptrKey};
+                        mapGetValue->UnSafeCall((void*)value, &keyValue, getValueArgs);
+
+                        if (keyType == TypeOf<c_string>() )
+                        {
+                            c_string* str = (c_string*)ptrKey;
+                            std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
+                            jsonWriter.WriteProperty(*str);
+                        }
+                        else // keyType == TypeOf<w_string>()
+                        {
+                            w_string* str = (w_string*)ptrKey;
+                            std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
+                            jsonWriter.WriteProperty(*str);
+                        }
+
+                        if (declaration.Type->Templates[1].IsPtr)
+                            Write(declaration.Type->Templates[1], *(void**)keyValue);
+                        else
+                            Write(declaration.Type->Templates[1], keyValue);
+                    }
+                }
+                jsonWriter.WriteObjectEnd();
+            }
+            else
+            {
+                // Object
+
+                EJSON_ASSERT(value != nullptr, "cannot be null if not ptr");
+
+                const Type* type = declaration.Type;
+                if (declaration.IsPtr)
+                {
+                    if (IsA(*type, TypeOf<eti::Object>()))
+                    {
+                        eti::Object* object = (eti::Object*)value;
+                        type = &object->GetType();
+                    }
+                }
+
+                jsonWriter.WriteObjectBegin();
+
+                if (*type != *declaration.Type)
+                {
+                    jsonWriter.WriteProperty(EJSON_TEXT("@type"));
+                    jsonWriter.WriteString(ToWString(type->Name));
+                }
+
+                for (const Property& property : type->Properties)
+                {
+                    jsonWriter.WriteProperty(property.Variable.Name);
+                    if (property.Variable.Declaration.IsPtr)
+                    {
+                        void** propertyValue = (void**)property.UnSafeGetPtr(const_cast<void*>(value));
+                        Write(property.Variable.Declaration, *propertyValue);
+                    }
+                    else
+                    {
+                        void* propertyValue = property.UnSafeGetPtr(const_cast<void*>(value));
+                        Write(property.Variable.Declaration, propertyValue);
+                    }
+                }
+                jsonWriter.WriteObjectEnd();
+            }
         }
 
         void WritePod(const eti::Declaration& declaration, const void* value) noexcept
@@ -203,87 +287,6 @@ namespace ejson
             else
             {
                 jsonWriter.WriteString("invalid");
-            }
-        }
-
-        void WriteTemplate(const eti::Declaration& declaration, const void* value) noexcept
-        {
-            // vector
-            if (declaration.Type->Name.starts_with("std::vector"))
-            {
-                jsonWriter.WriteArrayBegin();
-                size_t size;
-                declaration.Type->GetMethod("GetSize")->UnSafeCall((void*)value, &size, {});
-                const Type& itemType = *declaration.Type->Templates[0].Type;
-                const Method* getAt = declaration.Type->GetMethod("GetAt");
-                for (size_t i = 0; i < size; ++i)
-                {
-                    void* ptr = nullptr;
-                    void* args[1] = { &i };
-                    getAt->UnSafeCall((void*)value, &ptr, args);
-
-                    if (declaration.Type->Templates[0].IsPtr)
-                        Write(declaration.Type->Templates[0], *(void**)ptr);
-                    else
-                        Write(declaration.Type->Templates[0], ptr);
-                }
-                jsonWriter.WriteArrayEnd();
-            }
-
-            // map
-            if (declaration.Type->Name.starts_with("std::map"))
-            {
-                jsonWriter.WriteObjectBegin();
-
-                const Type& keyType = *declaration.Type->Templates[0].Type;
-
-                if ( (keyType == TypeOf<c_string>() || keyType == TypeOf<w_string>()) && declaration.Type->Templates[0].IsValue)
-                {
-                    const Type& valueType = *declaration.Type->Templates[1].Type;
-
-                    // get all keys
-                    const Method* mapGetKeys = declaration.Type->GetMethod("GetKeys");
-                    const Method* mapGetValue = declaration.Type->GetMethod("GetValue");
-                    const Type& keysType = *mapGetKeys->Arguments[1].Declaration.Type;
-                    void* keys = keysType.New();
-                    void* args[1] = { &keys };
-                    mapGetKeys->UnSafeCall((void*)value, NoReturn, args);
-
-                    size_t size;
-                    keysType.GetMethod("GetSize")->UnSafeCall(keys, &size, {});
-                    const Method* keysGetAt = keysType.GetMethod("GetAt");
-
-                    for (size_t i = 0; i < size; ++i)
-                    {
-                        void* ptrKey = nullptr;
-                        void* getAtArgs[1] = { &i };
-                        keysGetAt->UnSafeCall(keys, &ptrKey, getAtArgs);
-
-                        void* keyValue;
-                        void* ptrValue = nullptr;
-                        void* getValueArgs[1] = {&ptrKey};
-                        mapGetValue->UnSafeCall((void*)value, &keyValue, getValueArgs);
-
-                        if (keyType == TypeOf<c_string>() )
-                        {
-                            c_string* str = (c_string*)ptrKey;
-                            std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
-                            jsonWriter.WriteProperty(*str);
-                        }
-                        else // keyType == TypeOf<w_string>()
-                        {
-                            w_string* str = (w_string*)ptrKey;
-                            std::vector<std::string>* stringKey = (std::vector<std::string>*) keys;
-                            jsonWriter.WriteProperty(*str);
-                        }
-
-                        if (declaration.Type->Templates[1].IsPtr)
-                            Write(declaration.Type->Templates[1], *(void**)keyValue);
-                        else
-                            Write(declaration.Type->Templates[1], keyValue);
-                    }
-                }
-                jsonWriter.WriteObjectEnd();
             }
         }
 

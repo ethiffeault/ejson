@@ -312,10 +312,47 @@ namespace test_03
     }
 }
 
-
 namespace test_04
 {
     TEST_CASE("test_04")
+    {
+        {
+            string refJson = EJSON_TEXT("{\"1212\":\"1212\"}");
+            std::map<w_string, c_string > value;
+            value[L"1212"] = "1212";
+            
+            string json;
+            WriteType(value, json);
+            REQUIRE(json == refJson);
+        }
+        
+        {
+            string refJson = EJSON_TEXT("[\"1212\",\"3434\"]");
+            std::vector<w_string> value;
+            value.emplace_back(L"1212");
+            value.emplace_back(L"3434");
+
+            string json;
+            WriteType(value, json);
+            REQUIRE(json == refJson);
+        }
+
+        {
+            string refJson = EJSON_TEXT("{\"3434\":[\"3434\"]}");
+            std::map< c_string, std::vector<w_string> > value;
+            value["3434"] = {};
+            value["3434"].emplace_back(L"3434");
+
+            string json;
+            WriteType(value, json);
+            REQUIRE(json == refJson);
+        }
+    }
+}
+
+namespace test_05
+{
+    TEST_CASE("test_05")
     {
         string refJson = EJSON_TEXT("{\"1212\":1212}");
         {
