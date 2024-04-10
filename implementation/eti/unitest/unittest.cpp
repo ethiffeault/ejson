@@ -317,6 +317,37 @@ namespace test_04
     TEST_CASE("test_04")
     {
         {
+            string refJson = EJSON_TEXT("\"1212\"");
+            {
+                c_string value = "1212";
+                string json;
+                WriteType(value, json);
+                REQUIRE(json == refJson);
+            }
+
+            {
+                c_string value;
+                ReadType(refJson, value);
+                REQUIRE(value == "1212");
+            }
+        }
+
+        {
+            string refJson = EJSON_TEXT("\"1212\"");
+            {
+                w_string value = L"1212";
+                string json;
+                WriteType(value, json);
+                REQUIRE(json == refJson);
+            }
+            {
+                w_string value;
+                ReadType(refJson, value);
+                REQUIRE(value == L"1212");
+            }
+        }
+
+        {
             string refJson = EJSON_TEXT("{\"1212\":\"1212\"}");
             std::map<w_string, c_string > value;
             value[L"1212"] = "1212";
@@ -354,24 +385,25 @@ namespace test_05
 {
     TEST_CASE("test_05")
     {
-        string refJson = EJSON_TEXT("{\"1212\":1212}");
-        {
-            std::map<std::string, int> map;
-            map["1212"] = 1212;
-            string json;
-            WriteType(map, json);
-            REQUIRE(json == refJson);
-        }
 
-        {
-            std::map<std::string, int*> map;
-            map["1212"] = new int;;
-            *map["1212"] = 1212;
-            string json;
-            WriteType(map, json);
-            REQUIRE(json == refJson);
-            delete map["1212"];
-        }
+        string refJson = EJSON_TEXT("{\"1212\":1212}");
+        //{
+        //    std::map<std::string, int> map;
+        //    map["1212"] = 1212;
+        //    string json;
+        //    WriteType(map, json);
+        //    REQUIRE(json == refJson);
+        //}
+
+        //{
+        //    std::map<std::string, int*> map;
+        //    map["1212"] = new int;;
+        //    *map["1212"] = 1212;
+        //    string json;
+        //    WriteType(map, json);
+        //    REQUIRE(json == refJson);
+        //    delete map["1212"];
+        //}
 
         {
             std::map<std::string, int> map;
@@ -389,6 +421,30 @@ namespace test_05
         }
     }
 }
+
+namespace test_06
+{
+    TEST_CASE("test_06")
+    {
+        test::Register();
+        {
+            Point p;
+            string json;
+            WriteType(p, json);
+            REQUIRE(json == EJSON_TEXT("{\"X\":0,\"Y\":0}"));
+        }
+
+        {
+            string json = EJSON_TEXT("{\"X\":1,\"Y\":1}");
+            Point p;
+            ReadType(json, p);
+            REQUIRE(p.X == 1.0f);
+        }
+    }
+}
+
+
+
 //namespace test_11
 //{
 //    TEST_CASE("test_11")

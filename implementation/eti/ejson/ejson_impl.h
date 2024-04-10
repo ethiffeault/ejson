@@ -320,8 +320,6 @@ namespace ejson
         {
             if (ValueBegin())
             {
-                EJSON_ASSERT(current->Type == ContextType::Map || current->Type == ContextType::Object, "should be map or object");
-
                 if (current->Type == ContextType::Map)
                 {
                     if (current->Value == nullptr)
@@ -335,17 +333,22 @@ namespace ejson
                         current->Declaration.Type->GetMethod("Clear")->UnSafeCall(current->Value, NoReturn, {});                    
                     }
 
-                    PushContext(nullptr, current->Declaration.Type->Templates[1]);
                 }
-                else // current->Type == ContextType::Object
+                else if ( current->Type == ContextType::Object )
                 {
-                    // object 
-                    EJSON_ERROR("not implemented");
+                    if (current->Value == nullptr)
+                    {
+                    }
+                    else
+                    {
+                    }
+                }
+                else
+                {
                 }
             }
             else
             {
-                PushInvalid();
             }
         }
 
@@ -357,28 +360,21 @@ namespace ejson
         {
             EJSON_ASSERT(pendingType == false, "invalid pending status");
 
-            if (current->Value == nullptr)
+            if (current->Type == ContextType::Map)
             {
-                EJSON_ASSERT(contexts.size() > 1, "internal error");
-                Context* parentContext = &contexts[contexts.size() - 2];
-
-                EJSON_ASSERT(parentContext->Type == ContextType::Map || parentContext->Type == ContextType::Object, "internal error");
-
-                if (parentContext->Type == ContextType::Map)
-                {
-                    mapKey = key;
-                    return;
-                }
-                else // parentContext->Type == ContextType::Object
+                mapKey = key;
+                PushContext(nullptr, current->Declaration.Type->Templates[1]);
+                return;
+            }
+            else if (current->Type == ContextType::Object)
+            {
+                if (current->Value == nullptr)
                 {
                     pendingKey = key;
                     pendingType = true;
-                    return;
+                    return; // don't push context
                 }
-            }
-            else
-            {
-                if (current->Value != nullptr)
+                else
                 {
                     const Property* property = current->Declaration.Type->GetProperty(ToString(key));
                     if (property)
@@ -394,7 +390,10 @@ namespace ejson
 
         void PropertyEnd() noexcept
         {
-            PopContext();
+            if (pendingType == false)
+                PopContext();
+            else
+                pendingType = false;
         }
 
         void ArrayBegin() noexcept
@@ -622,6 +621,7 @@ namespace ejson
             Context context;
             context.Type = ContextType::Invalid;
             contexts.push_back(context);
+            current = &contexts[contexts.size() - 1];
         }
 
         void PushContext(void* value, const Declaration& declaration)
@@ -638,6 +638,14 @@ namespace ejson
             {
                 Context context;
                 context.Type = ContextType::Map;
+                context.Value = value;
+                context.Declaration = declaration;
+                contexts.push_back(context);
+            }
+            else if ( declaration.Type->Kind == Kind::Class || declaration.Type->Kind == Kind::Struct)
+            {
+                Context context;
+                context.Type = ContextType::Object;
                 context.Value = value;
                 context.Declaration = declaration;
                 contexts.push_back(context);
