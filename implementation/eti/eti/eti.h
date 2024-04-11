@@ -692,7 +692,7 @@ namespace eti
     // Declaration, store information about type and it's modifier
     struct Declaration
     {
-        const Type* Type;
+        const Type* Type = nullptr;
         bool IsValue:1 = false;
         bool IsPtr:1 = false;
         bool IsRef:1 = false;     // todo: ref are considered as ptr for now

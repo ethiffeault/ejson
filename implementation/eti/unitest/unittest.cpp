@@ -345,6 +345,13 @@ namespace test_04
                 ReadType(refJson, value);
                 REQUIRE(value == L"1212");
             }
+
+            {
+                w_string* value = nullptr;
+                ReadType(refJson, value);
+                REQUIRE(*value == L"1212");
+                delete value;
+            }
         }
 
         {
@@ -387,37 +394,78 @@ namespace test_05
     {
 
         string refJson = EJSON_TEXT("{\"1212\":1212}");
-        //{
-        //    std::map<std::string, int> map;
-        //    map["1212"] = 1212;
-        //    string json;
-        //    WriteType(map, json);
-        //    REQUIRE(json == refJson);
-        //}
 
-        //{
-        //    std::map<std::string, int*> map;
-        //    map["1212"] = new int;;
-        //    *map["1212"] = 1212;
-        //    string json;
-        //    WriteType(map, json);
-        //    REQUIRE(json == refJson);
-        //    delete map["1212"];
-        //}
 
+        // c string
         {
-            std::map<std::string, int> map;
-            ReadType(refJson, map);
-            REQUIRE(map.size() == 1);
-            REQUIRE(map["1212"] == 1212);
+            {
+                std::map<std::string, int> map;
+                map["1212"] = 1212;
+                string json;
+                WriteType(map, json);
+                REQUIRE(json == refJson);
+            }
+
+            {
+                std::map<std::string, int*> map;
+                map["1212"] = new int;;
+                *map["1212"] = 1212;
+                string json;
+                WriteType(map, json);
+                REQUIRE(json == refJson);
+                delete map["1212"];
+            }
+
+            {
+                std::map<std::string, int> map;
+                ReadType(refJson, map);
+                REQUIRE(map.size() == 1);
+                REQUIRE(map["1212"] == 1212);
+            }
+
+            {
+                std::map<std::string, int*> map;
+                ReadType(refJson, map);
+                REQUIRE(map.size() == 1);
+                REQUIRE(*map["1212"] == 1212);
+                delete map["1212"];
+            }
         }
 
+        // w string
         {
-            std::map<std::string, int*> map;
-            ReadType(refJson, map);
-            REQUIRE(map.size() == 1);
-            REQUIRE(*map["1212"] == 1212);
-            delete map["1212"];
+            {
+                std::map<std::wstring, int> map;
+                map[L"1212"] = 1212;
+                string json;
+                WriteType(map, json);
+                REQUIRE(json == refJson);
+            }
+
+            {
+                std::map<std::wstring, int*> map;
+                map[L"1212"] = new int;;
+                *map[L"1212"] = 1212;
+                string json;
+                WriteType(map, json);
+                REQUIRE(json == refJson);
+                delete map[L"1212"];
+            }
+
+            {
+                std::map<std::wstring, int> map;
+                ReadType(refJson, map);
+                REQUIRE(map.size() == 1);
+                REQUIRE(map[L"1212"] == 1212);
+            }
+
+            {
+                std::map<std::wstring, int*> map;
+                ReadType(refJson, map);
+                REQUIRE(map.size() == 1);
+                REQUIRE(*map[L"1212"] == 1212);
+                delete map[L"1212"];
+            }
         }
     }
 }
@@ -443,8 +491,75 @@ namespace test_06
     }
 }
 
+namespace test_07
+{
+    TEST_CASE("test_07")
+    {
+        string refJson = EJSON_TEXT("null");
+        {
+            void* foo = nullptr;
+            string json;
+            WriteType(foo, json);
+            REQUIRE(json == refJson);
+        }
 
+        {
+            Foo* foo = nullptr;
+            string json;
+            WriteType(foo, json);
+            REQUIRE(json == refJson);
+        }
 
+        {
+            Foo* foo = new Foo();
+            ReadType(refJson, foo);
+            REQUIRE(foo == nullptr);
+        }
+    }
+}
+
+namespace test_08
+{
+    TEST_CASE("test_08")
+    {
+        string refJson = EJSON_TEXT("true");
+        {
+            bool value = true;
+            string json;
+            WriteType(value, json);
+            REQUIRE(json == refJson);
+        }
+
+        {
+            bool value = false;
+            ReadType(refJson, value);
+            REQUIRE(value == true);
+        }
+    }
+}
+
+namespace test_09
+{
+    TEST_CASE("test_09")
+    {
+        string refJson = EJSON_TEXT("\"Friday\"");
+        {
+            Day day = Day::Friday;
+            string json;
+            WriteType(day, json);
+            REQUIRE(json == refJson);
+        }
+
+        {
+            Day day = Day::Monday;
+            ReadType(refJson, day);
+            REQUIRE(day == Day::Friday);
+        }
+    }
+}
+
+//
+//
 //namespace test_11
 //{
 //    TEST_CASE("test_11")
@@ -579,7 +694,7 @@ namespace test_06
 //        }
 //    }
 //}
-//
+
 //namespace test_15
 //{
 //    TEST_CASE("test_15")
