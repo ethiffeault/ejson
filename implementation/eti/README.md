@@ -2,8 +2,6 @@
 
 [eti - Extended Type Information for c++](https://github.com/ethiffeault/eti)
 
-**WIP**
-
 ```cpp
     struct Point
     {
