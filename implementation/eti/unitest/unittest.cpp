@@ -558,38 +558,39 @@ namespace test_09
     }
 }
 
-//
-//
-//namespace test_11
-//{
-//    TEST_CASE("test_11")
-//    {
-//        test::Register();
-//
-//        Point p;
-//        string json;
-//        WriteType(p, json);
-//        REQUIRE(json == EJSON_TEXT("{\"X\":0,\"Y\":0}"));
-//
-//        Foo foo;
-//        WriteType(foo, json);
-//        REQUIRE(json == EJSON_TEXT("{\"CurrentDay\":\"Friday\",\"Data\":[1,2],\"Point\":{\"X\":0,\"Y\":0}}"));
-//
-//        Foo foo2;
-//        foo2.Data.clear();
-//        foo2.CurrentDay = Day::Monday;
-//        foo2.Point.X = 1;
-//        foo2.Point.Y = 1;
-//
-//        ParserError error;
-//        ReadType(json, foo2, error);
-//        REQUIRE(foo2.CurrentDay == Day::Friday);
-//        REQUIRE(foo2.Data.size() == 2);
-//        REQUIRE(foo2.Point.X == 0);
-//        REQUIRE(foo2.Point.Y == 0);
-//    }
-//}
-//
+
+
+namespace test_11
+{
+    TEST_CASE("test_11")
+    {
+        test::Register();
+
+        Point p;
+        string json;
+        WriteType(p, json);
+        REQUIRE(json == EJSON_TEXT("{\"X\":0,\"Y\":0}"));
+
+        Foo foo;
+        WriteType(foo, json);
+        REQUIRE(json == EJSON_TEXT("{\"CurrentDay\":\"Friday\",\"Data\":[1,2],\"Point\":{\"X\":0,\"Y\":0}}"));
+
+        Foo foo2;
+        foo2.Data.clear();
+        foo2.CurrentDay = Day::Monday;
+        foo2.Point.X = 1;
+        foo2.Point.Y = 1;
+
+        ParserError error;
+        ReadType(json, foo2, error);
+        REQUIRE(foo2.CurrentDay == Day::Friday);
+        REQUIRE(foo2.Data.size() == 2);
+        REQUIRE(foo2.Point.X == 0);
+        REQUIRE(foo2.Point.Y == 0);
+    }
+}
+
+// todo: fix it!
 //namespace test_12
 //{
 //    TEST_CASE("test_12")
@@ -623,77 +624,77 @@ namespace test_09
 //
 //    }
 //}
-//
-//namespace test_13
-//{
-//    TEST_CASE("test_13")
-//    {
-//        test::Register();
-//        {
-//            Cat cat;
-//            const Type& type = cat.GetType();
-//            Animal* animal = &cat;
-//            string json;
-//            WriteType(animal, json);
-//            REQUIRE(json == EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}"));
-//        }
-//
-//        {
-//            string json = EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}");
-//            Animal* animal = nullptr;
-//            ParserError error;
-//            ReadType(json, animal, error);
-//            REQUIRE(IsA<Cat>(*animal));
-//        }
-//    }
-//}
-//
-//namespace test_14
-//{
-//    TEST_CASE("test_14")
-//    {
-//        {
-//            Zoo zoo;
-//            const Property* property = TypeOf<Zoo>().GetProperty("Animals");
-//            const Method* getAt = property->Variable.Declaration.Type->GetMethod("GetAt");
-//            int index = 0;
-//            void** ptr = nullptr;
-//            void* args[1] = { &index };
-//            getAt->CallMethod(zoo.Animals, &ptr, (size_t)0);
-//            REQUIRE(*ptr == zoo.Animals[0]);
-//
-//            void** ptrU = nullptr;
-//            size_t indexU = 0;
-//            void* argsU[1] = { &indexU };
-//            getAt->UnSafeCall(&zoo.Animals, &ptrU, argsU);
-//            REQUIRE(*ptrU == zoo.Animals[0]);
-//        }
-//
-//        string ref = EJSON_TEXT("{\"Animals\":[{\"@type\":\"test::Cat\",\"TailsLength\":0.3},{\"@type\":\"test::Bird\",\"Wingspan\":1.2},{\"MaxSpeed\":0}]}");
-//
-//        test::Register();
-//        {
-//            Zoo zoo;
-//            string json;
-//            WriteType(zoo, json);
-//            REQUIRE(json == ref);
-//        }
-//
-//        {
-//            Zoo zoo;
-//            for (auto a : zoo.Animals)
-//                delete (a);
-//            zoo.Animals.clear();
-//            ParserError error;
-//            ReadType(ref, zoo, error);
-//            // todo!
-//            REQUIRE(zoo.Animals.size() == 3);
-//            REQUIRE(IsA<Cat>(*zoo.Animals[0]));
-//            REQUIRE(IsA<Bird>(*zoo.Animals[1]));
-//            REQUIRE(IsA<Animal>(*zoo.Animals[2]));
-//        }
-//    }
-//}
+
+namespace test_13
+{
+    TEST_CASE("test_13")
+    {
+        test::Register();
+        {
+            Cat cat;
+            const Type& type = cat.GetType();
+            Animal* animal = &cat;
+            string json;
+            WriteType(animal, json);
+            REQUIRE(json == EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}"));
+        }
+
+        {
+            string json = EJSON_TEXT("{\"@type\":\"test::Cat\",\"TailsLength\":0.3}");
+            Animal* animal = nullptr;
+            ParserError error;
+            ReadType(json, animal, error);
+            REQUIRE(IsA<Cat>(*animal));
+        }
+    }
+}
+
+namespace test_14
+{
+    TEST_CASE("test_14")
+    {
+        {
+            Zoo zoo;
+            const Property* property = TypeOf<Zoo>().GetProperty("Animals");
+            const Method* getAt = property->Variable.Declaration.Type->GetMethod("GetAt");
+            int index = 0;
+            void** ptr = nullptr;
+            void* args[1] = { &index };
+            getAt->CallMethod(zoo.Animals, &ptr, (size_t)0);
+            REQUIRE(*ptr == zoo.Animals[0]);
+
+            void** ptrU = nullptr;
+            size_t indexU = 0;
+            void* argsU[1] = { &indexU };
+            getAt->UnSafeCall(&zoo.Animals, &ptrU, argsU);
+            REQUIRE(*ptrU == zoo.Animals[0]);
+        }
+
+        string ref = EJSON_TEXT("{\"Animals\":[{\"@type\":\"test::Cat\",\"TailsLength\":0.3},{\"@type\":\"test::Bird\",\"Wingspan\":1.2},{\"MaxSpeed\":0}]}");
+
+        test::Register();
+        {
+            Zoo zoo;
+            string json;
+            WriteType(zoo, json);
+            REQUIRE(json == ref);
+        }
+
+        {
+            Zoo zoo;
+            for (auto a : zoo.Animals)
+                delete (a);
+            zoo.Animals.clear();
+            ParserError error;
+            ReadType(ref, zoo, error);
+            // todo!
+            REQUIRE(zoo.Animals.size() == 3);
+            REQUIRE(IsA<Cat>(*zoo.Animals[0]));
+            REQUIRE(IsA<Bird>(*zoo.Animals[1]));
+            REQUIRE(IsA<Animal>(*zoo.Animals[2]));
+        }
+    }
+}
 
 //namespace test_15
 //{

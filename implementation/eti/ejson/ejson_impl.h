@@ -350,6 +350,31 @@ namespace ejson
                 nextDeclaration = {};
                 nextValue = nullptr;
             }
+            else if (nextDeclaration.Type->Kind == Kind::Class )
+            {
+                if (nextDeclaration.IsPtr)
+                {
+                    // wait for @type
+                    nextObjectTypeKey = true;
+                }
+                else
+                {
+                    if (nextValue == nullptr)
+                    {
+                        TryCreateValue();
+                        if (nextValue == nullptr)
+                        {
+                            PushInvalid();
+                            return;
+                        }
+                    }
+
+                    PushContext(ContextType::Class, nextDeclaration, nextValue);
+
+                    nextDeclaration = {};
+                    nextValue = nullptr;                    
+                }
+            }
             else
             {
                 PushInvalid();
@@ -358,7 +383,14 @@ namespace ejson
 
         void ObjectEnd() noexcept
         {
-            PopContext();
+            if ( nextObjectTypeKey )
+            {
+                nextObjectTypeKey = false;
+            }
+            else
+            {
+                PopContext();
+            }
         }
 
         void PropertyBegin(const string_view& key) noexcept
@@ -384,11 +416,26 @@ namespace ejson
                     nextValue = nullptr;
                 }
             }
-            else if (current->Type == ContextType::Object )
+            else if (current->Type == ContextType::Class )
             {
-                EJSON_ERROR("not implemented");
+                if (key == EJSON_TEXT("@type") && nextObjectTypeKey)
+                {
+                }
+                else
+                {
+                    const Property* property = current->Declaration.Type->GetProperty(ToString(key));
+                    if ( property != nullptr)
+                    {
+                        nextDeclaration = property->Variable.Declaration;
+                        nextValue = ((u8*)current->Value) + property->Offset;
+                    }
+                    else
+                    {
+                        nextDeclaration = {};
+                        nextValue = nullptr;
+                    }
+                }
             }
-
         }
 
         void PropertyEnd() noexcept
@@ -462,6 +509,41 @@ namespace ejson
 
         void ValueString(const string_view& str) noexcept
         {
+            // handle object polymorphism creation
+            if (nextObjectTypeKey)
+            {
+                nextObjectTypeKey = false;
+                EJSON_ASSERT(nextDeclaration.IsPtr, "internal error");
+                const Type* nextObjectType = eti::Repository::Instance().GetType(ToString(str));
+                if (nextObjectType == nullptr)
+                {
+                    nextObjectType = current->Declaration.Type;
+                }
+                else
+                {
+                    if (!IsA(*nextObjectType, *nextDeclaration.Type))
+                        nextObjectType = nextDeclaration.Type;
+                }
+
+                if (nextValue == nullptr)
+                {
+                    TryCreateValue(nextObjectType);
+                    if (nextValue == nullptr)
+                    {
+                        PushInvalid();
+                        return;
+                    }
+                }
+                else
+                {
+                    *(void**)nextValue = nextObjectType->New();
+                }
+                PushContext(ContextType::Class, nextDeclaration, nextValue);
+                nextDeclaration = {};
+                nextValue = nullptr;  
+                return;
+            }
+
             if (nextDeclaration.Type == nullptr)
                 return;
 
@@ -655,7 +737,7 @@ namespace ejson
             nextValue = nullptr;
         }
 
-        void TryCreateValue()
+        void TryCreateValue(const Type* type = nullptr)
         {
             // vector or map
             EJSON_ASSERT(nextValue == nullptr, "internal error");
@@ -680,7 +762,11 @@ namespace ejson
                     else
                         addDefault->UnSafeCall(current->Value, &newValue, {});
                     nextValue = newValue;
-                    *(void**)nextValue = elementDeclaration.Type->New();
+
+                    if ( type != nullptr)
+                        *(void**)nextValue = type->New();
+                    else
+                        *(void**)nextValue = elementDeclaration.Type->New();
                 }
                 else
                 {
@@ -727,7 +813,11 @@ namespace ejson
                         else
                             insert->UnSafeCall(current->Value, &newValue, args);
                         nextValue = newValue;
-                        *(void**)nextValue = elementDeclaration.Type->New();
+
+                        if ( type != nullptr)
+                            *(void**)nextValue = type->New();
+                        else
+                            *(void**)nextValue = elementDeclaration.Type->New();
                     }
                     else
                     {
@@ -752,7 +842,7 @@ namespace ejson
             Vector,
             Map,
             Struct,
-            Object
+            Class
         };
 
         struct Context
@@ -768,6 +858,7 @@ namespace ejson
         string nextPropertyName = {};
         Context* current = nullptr;
         std::vector<Context> contexts;
+        bool nextObjectTypeKey = false;
 
         void PushInvalid()
         {
@@ -791,6 +882,10 @@ namespace ejson
         void PopContext()
         {
             EJSON_ASSERT(contexts.size() > 0, "internal error");
+
+            nextDeclaration = current->Declaration;
+            nextValue = nullptr;
+
             contexts.pop_back();
             current = contexts.size() ? &contexts[contexts.size() - 1] : nullptr;
         }
