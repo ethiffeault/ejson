@@ -590,40 +590,39 @@ namespace test_11
     }
 }
 
-// todo: fix it!
-//namespace test_12
-//{
-//    TEST_CASE("test_12")
-//    {
-//        test::Register();
-//        {
-//            string json;
-//            Doo foo;
-//            WriteType(foo, json);
-//            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":null}"));
-//        }
-//
-//        {
-//            string json = EJSON_TEXT("{\"PointPtr\":null}");
-//            ParserError error;
-//            Doo* foo = nullptr;
-//            ReadType(json, foo, error);
-//            REQUIRE(foo != nullptr);
-//            REQUIRE(foo->PointPtr == nullptr);
-//        }
-//
-//        {
-//            string json;
-//            Doo foo;
-//            foo.PointPtr = new Point();
-//            WriteType(foo, json);
-//            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":{\"X\":0,\"Y\":0}}"));
-//            delete (foo.PointPtr);
-//            foo.PointPtr = nullptr;
-//        }
-//
-//    }
-//}
+namespace test_12
+{
+    TEST_CASE("test_12")
+    {
+        test::Register();
+        {
+            string json;
+            Doo foo;
+            WriteType(foo, json);
+            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":null}"));
+        }
+
+        {
+            string json = EJSON_TEXT("{\"PointPtr\":null}");
+            ParserError error;
+            Doo* doo = nullptr;
+            ReadType(json, doo, error);
+            REQUIRE(doo != nullptr);
+            REQUIRE(doo->PointPtr == nullptr);
+        }
+
+        {
+            string json;
+            Doo foo;
+            foo.PointPtr = new Point();
+            WriteType(foo, json);
+            REQUIRE(json == EJSON_TEXT("{\"PointPtr\":{\"X\":0,\"Y\":0}}"));
+            delete (foo.PointPtr);
+            foo.PointPtr = nullptr;
+        }
+
+    }
+}
 
 namespace test_13
 {
@@ -696,22 +695,22 @@ namespace test_14
     }
 }
 
-//namespace test_15
-//{
-//    TEST_CASE("test_15")
-//    {
-//        {
-//            FooArray foo1;
-//            foo1.Data.push_back(2);
-//            string json;
-//            WriteType(foo1, json);
-//            REQUIRE(json == EJSON_TEXT("{\"Data\":[2]}"));
-//
-//            FooArray foo2;
-//            ParserError error;
-//            ReadType(json, foo2, error);
-//            REQUIRE(foo2.Data.size() == 1);
-//            REQUIRE(foo2.Data[0] == 2);
-//        }
-//    }
-//}
+namespace test_15
+{
+    TEST_CASE("test_15")
+    {
+        {
+            FooArray foo1;
+            foo1.Data.push_back(2);
+            string json;
+            WriteType(foo1, json);
+            REQUIRE(json == EJSON_TEXT("{\"Data\":[2]}"));
+
+            FooArray foo2;
+            ParserError error;
+            ReadType(json, foo2, error);
+            REQUIRE(foo2.Data.size() == 1);
+            REQUIRE(foo2.Data[0] == 2);
+        }
+    }
+}

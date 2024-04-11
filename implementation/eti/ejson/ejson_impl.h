@@ -315,7 +315,7 @@ namespace ejson
                 return;
             }
 
-            if ( nextDeclaration.Type->Name.starts_with("std::map"))
+            if (nextDeclaration.Type->Name.starts_with("std::map"))
             {
                 if (nextValue == nullptr)
                 {
@@ -383,7 +383,7 @@ namespace ejson
 
         void ObjectEnd() noexcept
         {
-            if ( nextObjectTypeKey )
+            if (nextObjectTypeKey)
             {
                 nextObjectTypeKey = false;
             }
@@ -395,6 +395,29 @@ namespace ejson
 
         void PropertyBegin(const string_view& key) noexcept
         {
+            if ( nextObjectTypeKey && key != EJSON_TEXT("@type"))
+            {
+                nextObjectTypeKey = false;
+                if (nextValue == nullptr)
+                {
+                    TryCreateValue();
+                    if (nextValue == nullptr)
+                    {
+                        PushInvalid();
+                        return;
+                    }
+                }
+                else
+                {
+                    *(void**)nextValue = nextDeclaration.Type->New();
+                }
+
+                PushContext(ContextType::Class, nextDeclaration, nextValue);
+
+                nextDeclaration = {};
+                nextValue = nullptr;      
+            }
+
             if (current == nullptr)
                 return;
 
@@ -420,6 +443,7 @@ namespace ejson
             {
                 if (key == EJSON_TEXT("@type") && nextObjectTypeKey)
                 {
+                    // skip here, will be created later
                 }
                 else
                 {
@@ -427,7 +451,10 @@ namespace ejson
                     if ( property != nullptr)
                     {
                         nextDeclaration = property->Variable.Declaration;
-                        nextValue = ((u8*)current->Value) + property->Offset;
+                        if ( current->Declaration.IsPtr)
+                            nextValue = ((u8*)*(void**)current->Value) + property->Offset;
+                        else
+                            nextValue = ((u8*)current->Value) + property->Offset;
                     }
                     else
                     {
