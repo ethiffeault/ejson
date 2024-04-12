@@ -987,21 +987,44 @@ namespace ejson
         }
     }
 
-    //template <typename T>
-    //void Write(const T& value, output_stream& stream, bool prettify = false) noexcept
-    //{
-    //    StreamWriter streamWriter(stream);
-    //    if (!prettify)
-    //    {
-    //        JsonWriter jsonWriter(streamWriter);
-    //        TypeWriter valueWriter(jsonWriter);
-    //        valueWriter.Write(value);
-    //    }
-    //    else
-    //    {
-    //        JsonWriter<StreamWriter, true> jsonWriter(streamWriter);
-    //        TypeWriter valueWriter(jsonWriter);
-    //        valueWriter.Write(value);
-    //    }
-    //}
+    template <typename T>
+    void Write(const T& value, output_stream& stream, bool prettify = false) noexcept
+    {
+        StreamWriter streamWriter(stream);
+
+        if (!prettify)
+        {
+            JsonWriter jsonWriter(streamWriter);
+            TypeWriter valueWriter(jsonWriter);
+
+            Declaration declaration = {};
+            declaration.Type = &TypeOf<T>();
+            if constexpr (std::is_pointer_v<T>)
+            {
+                declaration.IsPtr = true;
+                valueWriter.Write(declaration, value);
+            }
+            else
+            {
+                valueWriter.Write(declaration, &value);
+            }
+        }
+        else
+        {
+            JsonWriter<StreamWriter, true> jsonWriter(streamWriter);
+            TypeWriter valueWriter(jsonWriter);
+
+            Declaration declaration = {};
+            declaration.Type = &TypeOf<T>();
+            if constexpr (std::is_pointer_v<T>)
+            {
+                declaration.IsPtr = true;
+                valueWriter.Write(declaration, value);
+            }
+            else
+            {
+                valueWriter.Write(declaration, &value);
+            }
+        }
+    }
 }

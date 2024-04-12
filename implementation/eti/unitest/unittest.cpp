@@ -37,6 +37,11 @@ namespace test
             ETI_METHODS()
         )
 
+        bool operator==(const Point& other) const
+        {
+            return (this->X == other.X) && (this->Y == other.Y);
+        }
+
         float X = 0.0f;
         float Y = 0.0f;
     };
@@ -711,6 +716,42 @@ namespace test_15
             ReadType(json, foo2, error);
             REQUIRE(foo2.Data.size() == 1);
             REQUIRE(foo2.Data[0] == 2);
+        }
+    }
+}
+
+namespace test_16
+{
+    TEST_CASE("test_16")
+    {
+        {
+            std::vector<Point> points;
+
+            points.emplace_back();
+            points.emplace_back();
+            points.emplace_back();
+
+            points[1].X = 1;
+            points[1].Y = 1;
+
+            points[2].X = 2;
+            points[2].Y = 2;
+
+            string json;
+            WriteType(points, json);
+            REQUIRE(json == EJSON_TEXT("[{\"X\":0,\"Y\":0},{\"X\":1,\"Y\":1},{\"X\":2,\"Y\":2}]"));
+
+            points.clear();
+
+            ReadType(json, points);
+
+            REQUIRE(points.size() == 3);
+            REQUIRE(points[0].X == 0);
+            REQUIRE(points[0].Y == 0);
+            REQUIRE(points[1].X == 1);
+            REQUIRE(points[1].Y == 1);
+            REQUIRE(points[2].X == 2);
+            REQUIRE(points[2].Y == 2);
         }
     }
 }
